@@ -9,6 +9,7 @@
 #include "patricia.h"
 #include <stdio.h> /* printf */
 #include <stdlib.h> /* exit */
+#include <string.h>
 
 #include "crt_dbg_leak.h"
 

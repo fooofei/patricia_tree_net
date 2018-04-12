@@ -275,14 +275,14 @@ ascii2prefix(int family, char *string)
 #endif /* HAVE_IPV6 */
 
     if ((cp = strchr(string, '/')) != NULL) {
-        bitlen = atol(cp + 1);
+        bitlen = (u_long)atol(cp + 1);
         /* *cp = '\0'; */
         /* copy the string to save. Avoid destroying the string */
         assert(cp - string < MAXLINE);
         memcpy(save, string, cp - string);
         save[cp - string] = '\0';
         string = save;
-        if (bitlen < 0 || bitlen > maxbitlen)
+        if (bitlen > maxbitlen)
             bitlen = maxbitlen;
     }
     else {
