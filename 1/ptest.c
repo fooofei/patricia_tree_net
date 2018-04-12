@@ -5,6 +5,9 @@
  * Compiling the test code (or any other file using libpatricia):
  *
  *     gcc -g -Wall -I. -L. -o ptest patricia_test.c -lpatricia
+
+ https://github.com/brandt/network-patricia/blob/master/ptest.c
+
  */
 
 #include <stdarg.h>
