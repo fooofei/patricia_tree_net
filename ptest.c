@@ -218,8 +218,8 @@ void test2()
     root.p_key = 0;
     root.p_left = &root;
     root.p_left = &root;
-    root.p_b
 
+    // 没了 p_b 的事情了
 }
 
 
