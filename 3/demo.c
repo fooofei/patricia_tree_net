@@ -6,17 +6,97 @@
 
  */
 
-#include "patricia.h"
+
 #include <stdio.h> /* printf */
 #include <stdlib.h> /* exit */
 #include <string.h>
 
 #include "crt_dbg_leak.h"
 
-void func(prefix_t *prefix) {
-    printf("node: %s/%d\n", prefix_toa(prefix), prefix->bitlen);
-}
+#include "patricia.h"
 
+void test()
+{
+    struct patricia_tree mroot;
+    memset(&mroot, 0, sizeof(mroot));
+    struct patricia_tree * root = &mroot;
+
+    patricia_init(root);
+
+    patricia_lookup3(root, "127.0.0.0/8");
+
+
+    patricia_lookup3(root, "10.42.42.0/24");
+    patricia_lookup3(root, "10.42.69.0/24");
+    patricia_lookup3(root, "10.0.0.0/8");
+    patricia_lookup3(root, "10.0.0.0/9");
+
+
+    patricia_clear(root);
+
+
+// insert 127.0.0.0/8
+//       127.0.0.0 - 8 / 8
+
+
+// 127.0.0.0 / 8
+// 10.42.42.0 / 24
+//                0-0/1
+//             /          \
+//            /            \
+// 10.42.42.0 - 24 / 24    127.0.0.0 - 8 / 8
+
+
+
+// 127.0.0.0 / 8
+// 10.42.42.0 / 24
+// 10.42.69.0 / 24
+//                            0-0/1
+//                         /          \
+//                        /            \
+//                 0 - 0 / 17       127.0.0.0 - 8 / 8
+//                /          \
+// 10.42.42.0 - 24 / 24  10.42.69.0 - 24 / 24
+
+
+
+// 127.0.0.0 / 8
+// 10.42.42.0 / 24
+// 10.42.69.0 / 24
+// 10.0.0.0 / 8
+
+//                                        0-0/1
+//                                     /          \
+//                                    /            \
+//                          10.0.0.0 - 8 / 8     127.0.0.0 - 8 / 8
+//                               /
+//                          0 - 0 / 17
+//                         /      \
+//       10.42.42.0 - 24 / 24    10.42.69.0 - 24 / 24
+
+
+
+
+
+// 127.0.0.0 / 8
+// 10.42.42.0 / 24
+// 10.42.69.0 / 24
+// 10.0.0.0 / 8
+// 10.0.0.0 / 9
+
+//                         root(0 - 0 / 1)
+//                        /                \
+//                    10.0.0.0 - 8 / 8     127.0.0.0-8/8
+//                     /           
+//                 10.0.0.0-9/9
+//                  /       
+//                0-0/17
+//                 /    \
+//     10.42.42.0-24/24  10.42.69.0-24/24
+                       
+
+
+}
 
 
 int
@@ -26,50 +106,7 @@ main(void)
     memset(&dbg_leak, 0, sizeof(dbg_leak));
     crt_dbg_leak_lock(&dbg_leak);
 
-    patricia_tree_t *tree;
-    patricia_node_t *node;
-
-    tree = New_Patricia(32);
-
-    make_and_lookup(tree, "127.0.0.0/8");
-
-    try_search_best(tree, "127.0.0.1");
-    try_search_best(tree, "10.0.0.1");
-
-    make_and_lookup(tree, "10.42.42.0/24");
-    make_and_lookup(tree, "10.42.69.0/24");
-    make_and_lookup(tree, "10.0.0.0/8");
-    make_and_lookup(tree, "10.0.0.0/9");
-
-    try_search_best(tree, "10.42.42.0/24");
-    try_search_best(tree, "10.10.10.10");
-    try_search_best(tree, "10.10.10.1");
-    try_search_exact(tree, "10.0.0.0");
-    try_search_exact(tree, "10.0.0.0/8");
-
-#if 1
-    PATRICIA_WALK(tree->head, node) {
-       printf("node: %s/%d\n", 
-              prefix_toa(node->prefix), node->prefix->bitlen);
-    } PATRICIA_WALK_END;
-#else
-    printf("%u total nodes.\n", patricia_walk_inorder(tree->head, func));
-#endif
-
-    lookup_then_remove(tree, "42.0.0.0/8");
-    lookup_then_remove(tree, "10.0.0.0/8");
-    try_search_exact(tree, "10.0.0.0");
-
-#if 1
-    PATRICIA_WALK(tree->head, node) {
-       printf("node: %s/%d\n", 
-              prefix_toa(node->prefix), node->prefix->bitlen);
-    } PATRICIA_WALK_END;
-#else
-    printf("%u total nodes.\n", patricia_walk_inorder(tree->head, func));
-#endif
-
-    Destroy_Patricia(tree, (void *)0);
+    test();
 
 
     crt_dbg_leak_unlock(&dbg_leak);

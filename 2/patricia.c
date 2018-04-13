@@ -294,7 +294,9 @@ ascii2prefix(int family, char *string)
         {
             return (NULL);
         }
-        return (New_Prefix(AF_INET, &sin, bitlen));
+        prefix_t * p = New_Prefix(AF_INET, &sin, bitlen);
+        snprintf(p->sin_str, sizeof(p->sin_str), "%s", string);
+        return (p);
     }
 
 #ifdef HAVE_IPV6
@@ -483,7 +485,8 @@ patricia_search_exact(patricia_tree_t *patricia, prefix_t *prefix)
     addr = prefix_touchar(prefix);
     bitlen = prefix->bitlen;
 
-    while (node->bit < bitlen) {
+    while (node->bit < bitlen) 
+    {
 
         if (BIT_TEST(addr[node->bit >> 3], 0x80 >> (node->bit & 0x07))) {
 #ifdef PATRICIA_DEBUG

@@ -14,8 +14,8 @@ set(Source_files
     ${CMAKE_CURRENT_LIST_DIR}/patricia.c
     ${CMAKE_CURRENT_LIST_DIR}/patricia.h
     ${CMAKE_CURRENT_LIST_DIR}/demo.c
-    ${CMAKE_CURRENT_LIST_DIR}/ipaddress.c
-    ${CMAKE_CURRENT_LIST_DIR}/ipaddress.h
+    ${CMAKE_CURRENT_LIST_DIR}/../ipaddress.c
+    ${CMAKE_CURRENT_LIST_DIR}/../ipaddress.h
     ${CMAKE_CURRENT_LIST_DIR}/crt_dbg_leak.h
     ${CMAKE_CURRENT_LIST_DIR}/crt_dbg_leak.c
 	)

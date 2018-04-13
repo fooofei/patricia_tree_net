@@ -46,6 +46,7 @@ typedef struct _prefix4_t {
     u_short bitlen;		/* same as mask? */
     int ref_count;		/* reference count */
     struct in_addr sin;
+    char sin_str[16];
 } prefix4_t;
 
 typedef struct _prefix_t {
@@ -58,6 +59,7 @@ typedef struct _prefix_t {
 		struct in6_addr sin6;
 #endif /* IPV6 */
     } add;
+    char sin_str[16];
 } prefix_t;
 
 /* } */
