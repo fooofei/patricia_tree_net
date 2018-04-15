@@ -235,6 +235,51 @@ struct patricia_node * patricia_lookup(struct patricia_tree * self, const char *
     return patricia_lookup2(self, &t);
 }
 
+/* Find the first different mask of curnode->prefix and prefix. */
+
+static uint32_t patricia_diff_mask(struct patricia_tree * self, struct patricia_node * curnode, struct prefix * prefix)
+{
+    uint8_t * node_addr = prefix_to_networkorder_bytes(curnode->prefix);
+    uint8_t * prefix_addr = prefix_to_networkorder_bytes(prefix);
+    uint8_t check_mask = min(curnode->mask, prefix->mask);
+    uint8_t diff_mask = 0;
+    uint8_t i;
+    uint8_t r;
+    uint8_t j;
+
+    /* diff mask 应该叫 diff mask start */
+    /* 这是在干啥 */
+    for (i = 0; i * 8 < check_mask; i += 1)
+    {
+        /* 从左到右找 */
+        if (0 == (r = (prefix_addr[i] ^ node_addr[i])))
+        {
+            diff_mask = (i + 1) * 8;
+            continue;
+        }
+
+        /* 这是在找 最先不同的那一bit*/
+        for (j = 0; j < 8; j += 1)
+        {
+            if (BIT_TEST(r, (0x80 >> j)))
+            {
+                break;
+            }
+        }
+
+        /* TODO  must found ?*/
+        if (!(j < 8))
+        {
+            return self->maxbits;
+        }
+        diff_mask = i * 8 + j;
+        break;
+    }
+
+    diff_mask = min(diff_mask, check_mask);
+    return diff_mask;
+}
+
 static struct patricia_node * patricia_lookup2(struct patricia_tree * self, struct prefix * prefix)
 {
     if (self->root ==0)
@@ -284,44 +329,8 @@ static struct patricia_node * patricia_lookup2(struct patricia_tree * self, stru
         return 0;
     }
 
-    uint8_t * node_addr = prefix_to_networkorder_bytes(node->prefix);
-    uint8_t check_mask = min(node->mask, prefix_mask);
-    uint8_t diff_mask = 0;
-    uint8_t i;
-    uint8_t r;
-    uint8_t j;
-
-    /* diff mask 应该叫 diff mask start */
-    /* 这是在干啥 */
-    for (i=0;i*8<check_mask;i+=1)
-    {
-        /* 从左到右找 */
-        if (0==(r=(prefix_addr[i] ^node_addr[i])))
-        {
-            diff_mask = (i + 1) * 8; 
-            continue;
-        }
-
-        /* 这是在找 最先不同的那一bit*/
-        for (j=0;j<8;j+=1)
-        {
-            if (BIT_TEST(r,(0x80>>j)))
-            {
-                break;
-            }
-        }
-
-        /* TODO  must found ?*/
-        if (!(j < 8))
-        {
-            return 0;
-        }
-        diff_mask = i * 8 + j;
-        break;
-    }
-    
-    diff_mask = min(diff_mask, check_mask);
-
+    uint32_t diff_mask = patricia_diff_mask(self, node, prefix);
+   
     struct patricia_node * parent;
 
     parent = node->parent;
