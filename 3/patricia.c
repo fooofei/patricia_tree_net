@@ -39,7 +39,7 @@ static inline uint32_t _patricia_nbit(uint32_t x)
 static struct patricia_node * patricia_lookup2(struct patricia_tree * self, struct prefix * prefix);
 
 
-bool comp_with_mask(const uint32_t *addr, const uint32_t *dest, uint8_t mask)
+static bool comp_with_mask(const uint32_t *addr, const uint32_t *dest, uint8_t mask)
 {
 
     if ( /* mask/8 == 0 || */ memcmp(addr, dest, mask / 8) == 0) {
@@ -280,6 +280,15 @@ static uint32_t patricia_diff_mask(struct patricia_tree * self, struct patricia_
     return diff_mask;
 }
 
+static uint32_t patricia_bit_test(uint8_t * addr, uint8_t mask)
+{
+    uint32_t a = addr[mask >> 3];
+    /* 0x80 is one bit */
+    /* mask=32 看（右边起）第 8 位是不是 1 ， mask=31 看 第1 位是不是 1， mask=30 看第2位是不是1*/
+    uint32_t b = (0x80 >> ((mask) & 0x7)); 
+    return a & b;
+}
+
 static struct patricia_node * patricia_lookup2(struct patricia_tree * self, struct prefix * prefix)
 {
     if (self->root ==0)
@@ -297,15 +306,9 @@ static struct patricia_node * patricia_lookup2(struct patricia_tree * self, stru
     node = self->root;
 
     for (;node && node->mask< prefix_mask;)
-    {
-        /* TODO 为什么有第一个判断？ */
-        /* 这里能提前取 a b 吗 会不会崩溃 */
-        uint32_t a;
-        uint32_t b;
-        a = prefix_addr[_patricia_nbyte(node->mask)];
-        b = _patricia_nbit(node->mask); /* 这是在找 1 */
-        /* mask=32 看（右边起）第 8 位是不是 1 ， mask=31 看 第1 位是不是 1， mask=30 看第2位是不是1*/
-        if (node->mask < self->maxbits && BIT_TEST(a,b) )
+    {      
+        if (node->mask < self->maxbits 
+            && patricia_bit_test(prefix_addr, node->mask))
         {
             if (node->right == NULL)
             {
@@ -330,7 +333,8 @@ static struct patricia_node * patricia_lookup2(struct patricia_tree * self, stru
     }
 
     uint32_t diff_mask = patricia_diff_mask(self, node, prefix);
-   
+    uint8_t * node_addr = prefix_to_networkorder_bytes(node->prefix);
+
     struct patricia_node * parent;
 
     parent = node->parent;
@@ -359,11 +363,9 @@ static struct patricia_node * patricia_lookup2(struct patricia_tree * self, stru
     if (node->mask == diff_mask)
     {
         new_node->parent = node;
-        uint32_t a;
-        uint32_t b;
-        a = prefix_addr[_patricia_nbyte(node->mask)];
-        b = _patricia_nbit(node->mask);
-        if (node->mask < self->maxbits && BIT_TEST(a, b))
+
+        if (node->mask < self->maxbits 
+            && patricia_bit_test(prefix_addr,node->mask))
         {
             node->right = new_node;
         }
@@ -376,7 +378,7 @@ static struct patricia_node * patricia_lookup2(struct patricia_tree * self, stru
 
     if (prefix_mask == diff_mask)
     {
-        if (prefix_mask<self->maxbits && BIT_TEST(node_addr[prefix_mask>>3], _patricia_nbit(prefix_mask)))
+        if (prefix_mask<self->maxbits && patricia_bit_test(node_addr,prefix_mask))
         {
             new_node->right = node;
         }

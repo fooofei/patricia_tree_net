@@ -34,7 +34,7 @@ struct patricia_node
     struct patricia_node * left;
     struct patricia_node * right;
     struct patricia_node * parent;
-    uint32_t mask;  /* 不一定等于 prefix->mask  可能是其他 */
+    uint8_t mask;  /* 不一定等于 prefix->mask  可能是其他 */
     struct prefix * prefix;		/* who we are in patricia tree  TODO以后省内存 放指针 复用 */
     //void *data;			/* pointer to data TODO */
     // void	*user1;			/* pointer to usr data (ex. route flap info) TODO */
