@@ -34,7 +34,7 @@ static inline uint32_t _patricia_nbyte(uint32_t x)
 }
 static inline uint32_t _patricia_nbit(uint32_t x)
 {
-    return  (0x80 >> ((x) & 0x7));
+    return  (uint32_t)(0x80 >> ((x) & 0x7));
 }
 static struct patricia_node * patricia_lookup2(struct patricia_tree * self, struct prefix * prefix);
 
@@ -291,14 +291,18 @@ static struct patricia_node * patricia_lookup2(struct patricia_tree * self, stru
     uint8_t r;
     uint8_t j;
 
+    /* diff mask 应该叫 diff mask start */
     /* 这是在干啥 */
     for (i=0;i*8<check_mask;i+=1)
     {
+        /* 从左到右找 */
         if (0==(r=(prefix_addr[i] ^node_addr[i])))
         {
             diff_mask = (i + 1) * 8; 
             continue;
         }
+
+        /* 这是在找 最先不同的那一bit*/
         for (j=0;j<8;j+=1)
         {
             if (BIT_TEST(r,(0x80>>j)))
