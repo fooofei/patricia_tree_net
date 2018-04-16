@@ -91,6 +91,18 @@ int ipaddr_ptoh(const char * paddr, uint32_t * out)
     return ret;
 }
 
+int ipaddr_hton(uint32_t haddr, uint32_t * out)
+{
+    *out = htonl(haddr);
+    return 0;
+}
+
+int ipaddr_ntoh(uint32_t naddr, uint32_t * out)
+{
+    *out = ntohl(naddr);
+    return 0;
+}
+
 // Ref https://github.com/tobez/Net-Patricia/blob/master/libpatricia/patricia.c
 int ipaddr_pton2(const char *src, uint32_t *dst)
 {

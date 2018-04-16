@@ -41,7 +41,7 @@ main(void)
     make_and_lookup(tree, "10.0.0.0/8");
     make_and_lookup(tree, "10.0.0.0/9");
 
-    try_search_best(tree, "10.42.42.0/24");
+    node = try_search_best(tree, "10.42.42.0/24");
     try_search_best(tree, "10.10.10.10");
     try_search_best(tree, "10.10.10.1");
     try_search_exact(tree, "10.0.0.0");

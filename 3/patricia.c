@@ -14,32 +14,18 @@
 #include "patricia.h"
 #include "../ipaddress.h"
 
-#define MAXLINE 1024
-#define BIT_TEST(f, b)  ((f) & (b))
 
-
-
-/* 这是干什么用的？ 为什么还有这个 BIT_TEST(addr[node->bit >> 3], 0x80 >> (node->bit & 0x07)) */
+/* 这是干什么用的？ 为什么还有这个 BIT_TEST(addr[node->bit >> 3], 0x80 >> (node->bit & 0x07)) 
+  原来代码好混乱
+*/
 // #define PATRICIA_NBIT(x)        (0x80 >> ((x) & 0x7f))
 //#define PATRICIA_NBYTE(x)       ((x) >> 3)
 
-#define PATRICIA_DATA_GET(node, type) (type *)((node)->data)
-#define PATRICIA_DATA_SET(node, value) ((node)->data = (void *)(value))
-#define PATRICIA_DEBUG 1 
+static struct patricia_node * patricia_lookup(struct patricia_tree * self, const struct prefix * prefix);
+static uint8_t patricia_bit_test(const uint8_t * addr, uint8_t mask);
+static struct patricia_node * patricia_search_exact(const struct patricia_tree * self, const struct prefix * prefix);
 
-
-static inline uint32_t _patricia_nbyte(uint32_t x)
-{
-    return x >> 3;
-}
-static inline uint32_t _patricia_nbit(uint32_t x)
-{
-    return  (uint32_t)(0x80 >> ((x) & 0x7));
-}
-static struct patricia_node * patricia_lookup2(struct patricia_tree * self, struct prefix * prefix);
-
-
-static bool comp_with_mask(const uint32_t *addr, const uint32_t *dest, uint8_t mask)
+static bool comp_with_mask(const void *addr, const void *dest, uint8_t mask)
 {
 
     if ( /* mask/8 == 0 || */ memcmp(addr, dest, mask / 8) == 0) {
@@ -83,17 +69,46 @@ int prefix_ascii2prefix(struct prefix * self, const char * begin, const char * e
 
     temp.mask = min(temp.mask, default_mask);
     memcpy(self, &temp, sizeof(*self));
+
+    snprintf(self->string, sizeof(self->string), "%.*s", (int)(end - begin), begin);
+
+    prefix_format(self);
+
     return 0;
 }
 
-void prefix_fprintf(struct prefix * self, FILE * f)
+void prefix_fprintf(const struct prefix * self, FILE * f)
 {
     fprintf(f, "%s/%u", self->sin_str, self->mask);
 }
 
-uint8_t * prefix_to_networkorder_bytes(struct prefix * self)
+uint8_t * prefix_to_networkorder_bytes(const struct prefix * self)
 {
     return (uint8_t *)&self->sin;
+}
+
+void prefix_format(struct prefix * self)
+{
+    int8_t mask = self->mask;
+    uint8_t maxmask = sizeof(uint32_t) * 8;
+    uint32_t v;
+    char * p = 0;
+
+    if (0 == mask)
+    {
+        return;
+    }
+    mask = min(maxmask, mask);
+    mask = maxmask - mask;
+    v = (0x1 << mask) - 1;
+    v = ~v;
+    ipaddr_hton(v,&v);
+    self->sin = self->sin & v;
+
+    ipaddr_ntop(self->sin, &p);
+    snprintf(self->sin_str, sizeof(self->sin_str), "%s", p);
+    snprintf(self->string, sizeof(self->string), "%s/%u", p, self->mask);
+    free(p);
 }
 
 void patricia_init(struct patricia_tree * self)
@@ -115,6 +130,7 @@ void patricia_clear(struct patricia_tree * self)
 
     for (; patricia_tree_iterator_next(&it, &cur);)
     {
+        patricia_node_free(self, cur);
     }
 
 
@@ -127,7 +143,6 @@ void patricia_clear(struct patricia_tree * self)
 
 }
 
-
 void patricia_tree_iterator_set(struct patricia_tree_iterator * self, const struct patricia_tree * tree)
 {
     memset(self, 0, sizeof(*self));
@@ -135,6 +150,7 @@ void patricia_tree_iterator_set(struct patricia_tree_iterator * self, const stru
     self->rn = tree->root;
 }
 
+/* Only iterator the node have prefix, not include glue node. */
 struct patricia_node * patricia_tree_iterator_next(struct patricia_tree_iterator * self, struct patricia_node ** out)
 {
     *out = 0;
@@ -175,11 +191,16 @@ struct patricia_node * patricia_tree_iterator_next(struct patricia_tree_iterator
         /* Not have avaliable node. */
         self->rn = NULL;
     }
+
+    if ((*out)->prefix == 0)
+    {
+        return patricia_tree_iterator_next(self, out);
+    }
     return *out;
 }
 
 
-struct patricia_node * patricia_search_exact(struct patricia_tree * self, struct prefix * prefix)
+static struct patricia_node * patricia_search_exact(const struct patricia_tree * self, const struct prefix * prefix)
 {
 
     assert(prefix->mask <= self->maxbits);
@@ -188,10 +209,33 @@ struct patricia_node * patricia_search_exact(struct patricia_tree * self, struct
 
     node = self->root;
     const uint32_t prefix_mask = prefix->mask;
+    const uint8_t * prefix_addr = prefix_to_networkorder_bytes(prefix);
 
-    //for (;node && node->prefix.mask < prefix_mask;)
+    for (;node && node->mask < prefix_mask;)
     {
+        if (patricia_bit_test(prefix_addr,node->mask))
+        {
+            node = node->right;
+        }
+        else
+        {
+            node = node->left;
+        }
+    }
 
+    if (!(node && node->prefix && node->mask == prefix_mask))
+    {
+        return 0;
+    }
+
+    assert(node->mask == prefix_mask);
+    assert(node->mask == node->prefix->mask);
+
+    if (comp_with_mask(prefix_to_networkorder_bytes(node->prefix),
+        prefix_to_networkorder_bytes(prefix), prefix_mask
+    ))
+    {
+        return node;
     }
 
     return 0;
@@ -216,29 +260,33 @@ struct patricia_node *  patricia_node_calloc(struct patricia_tree * self)
 
 }
 
+struct patricia_node *  patricia_node_calloc2(struct patricia_tree * self , const struct prefix * pre)
+{
+    struct patricia_node * n;
+    n = patricia_node_calloc(self);
+    if (n)
+    {
+        memcpy(n->prefix, pre, sizeof(struct prefix));
+        n->mask = pre->mask;
+    }
+    return n;
+}
+
 void patricia_node_free(struct patricia_tree * self, struct patricia_node * r)
 {
     r->is_alloced = 0;
     self->pool.active_count -= 1;
 }
 
-struct patricia_node * patricia_lookup3(struct patricia_tree * self, const char * p)
-{
-    return patricia_lookup(self, p, p + strlen(p));
-}
 
-struct patricia_node * patricia_lookup(struct patricia_tree * self, const char * begin, const char * end)
-{
-    struct prefix t;
-    memset(&t, 0, sizeof(t));
-    prefix_ascii2prefix(&t, begin, end);
-    return patricia_lookup2(self, &t);
-}
+/* Find the first different mask of curnode->prefix and prefix. 
+  The return value is starts from 0.
+*/
 
-/* Find the first different mask of curnode->prefix and prefix. */
+static uint32_t patricia_diff_mask(struct patricia_tree * self, const struct patricia_node * curnode, const  struct prefix * prefix)
+{ 
+#define BIT_TEST(f, b)  ((f) & (b))
 
-static uint32_t patricia_diff_mask(struct patricia_tree * self, struct patricia_node * curnode, struct prefix * prefix)
-{
     uint8_t * node_addr = prefix_to_networkorder_bytes(curnode->prefix);
     uint8_t * prefix_addr = prefix_to_networkorder_bytes(prefix);
     uint8_t check_mask = min(curnode->mask, prefix->mask);
@@ -248,7 +296,6 @@ static uint32_t patricia_diff_mask(struct patricia_tree * self, struct patricia_
     uint8_t j;
 
     /* diff mask 应该叫 diff mask start */
-    /* 这是在干啥 */
     for (i = 0; i * 8 < check_mask; i += 1)
     {
         /* 从左到右找 */
@@ -267,7 +314,6 @@ static uint32_t patricia_diff_mask(struct patricia_tree * self, struct patricia_
             }
         }
 
-        /* TODO  must found ?*/
         if (!(j < 8))
         {
             return self->maxbits;
@@ -280,22 +326,40 @@ static uint32_t patricia_diff_mask(struct patricia_tree * self, struct patricia_
     return diff_mask;
 }
 
-static uint32_t patricia_bit_test(uint8_t * addr, uint8_t mask)
+static uint8_t patricia_bit_test(const uint8_t * addr, uint8_t mask)
 {
-    uint32_t a = addr[mask >> 3];
+    uint8_t a = addr[mask >> 3];
     /* 0x80 is one bit */
     /* mask=32 看（右边起）第 8 位是不是 1 ， mask=31 看 第1 位是不是 1， mask=30 看第2位是不是1*/
-    uint32_t b = (0x80 >> ((mask) & 0x7)); 
+    uint8_t b = (0x80 >> ((mask) & 0x7)); 
     return a & b;
 }
 
-static struct patricia_node * patricia_lookup2(struct patricia_tree * self, struct prefix * prefix)
+/* Insert insert_node to child's parent. */
+static void patricia_insert(struct patricia_tree * self, struct patricia_node * insert_node, struct patricia_node * child)
+{
+    insert_node->parent = child->parent;
+    if (child->parent == 0)
+    {
+        self->root = insert_node;
+    }
+    else if (child->parent->right == child)
+    {
+        child->parent->right = insert_node;
+    }
+    else
+    {
+        assert(child->parent->left == child);
+        child->parent->left = insert_node;
+    }
+    child->parent = insert_node;
+}
+
+static struct patricia_node * patricia_lookup(struct patricia_tree * self, const struct prefix * prefix)
 {
     if (self->root ==0)
     {
-        self->root = patricia_node_calloc(self);
-        self->root->mask = prefix->mask;
-        memcpy(self->root->prefix, prefix, sizeof(struct prefix));
+        self->root = patricia_node_calloc2(self,prefix);
         return self->root;
     }
 
@@ -305,7 +369,7 @@ static struct patricia_node * patricia_lookup2(struct patricia_tree * self, stru
 
     node = self->root;
 
-    for (;node && node->mask< prefix_mask;)
+    for (;node && (node->mask< prefix_mask || node->prefix==NULL);)
     {      
         if (node->mask < self->maxbits 
             && patricia_bit_test(prefix_addr, node->mask))
@@ -333,6 +397,11 @@ static struct patricia_node * patricia_lookup2(struct patricia_tree * self, stru
     }
 
     uint32_t diff_mask = patricia_diff_mask(self, node, prefix);
+    if (diff_mask >= self->maxbits)
+    {
+        return 0;
+    }
+    /* 暂存 node 后面 node 会改变 */
     uint8_t * node_addr = prefix_to_networkorder_bytes(node->prefix);
 
     struct patricia_node * parent;
@@ -347,18 +416,26 @@ static struct patricia_node * patricia_lookup2(struct patricia_tree * self, stru
 
     if (diff_mask == prefix_mask && node->mask == prefix_mask)
     {
-
-        /* TODO 校验这时候 node->prefix 与 prefix 关系 */
-
-        assert(0 == memcmp(prefix, &node->prefix, sizeof(struct prefix)));
+        /* lookup 学习的 IP/MASK 是已经学习过的， 就会走到这里. 
+          如学习过 10.0.0.0/9, 再次 lookup  10.0.0.0/9 就会到这里，
+          如学习过 10.0.0.0/9，再次 lookup  10.1.0.0/9(错误的值) 也会走到这里
+        */
+        if (node->prefix)
+        {
+            assert(true == comp_with_mask(
+                prefix_to_networkorder_bytes(prefix),
+                prefix_to_networkorder_bytes(node->prefix), prefix_mask
+            ));
+        }
+        // Not always true.
+        //assert(0 == memcmp(prefix, node->prefix, sizeof(struct prefix)));
 
         return node;
     }
 
     struct patricia_node * new_node;
 
-    new_node = patricia_node_calloc(self);
-    memcpy(&new_node->prefix, prefix, sizeof(struct prefix));
+    new_node = patricia_node_calloc2(self, prefix);
 
     if (node->mask == diff_mask)
     {
@@ -386,20 +463,7 @@ static struct patricia_node * patricia_lookup2(struct patricia_tree * self, stru
         {
             new_node->left = node;
         }
-        new_node->parent = node->parent;
-        if (node->parent == 0)
-        {
-            self->root = new_node;
-        }
-        else if (node->parent->right==node)
-        {
-            node->parent->right = new_node;
-        }
-        else
-        {
-            node->parent->left = new_node;
-        }
-        node->parent = new_node;
+        patricia_insert(self, new_node, node);
     }
     else
     {
@@ -407,9 +471,8 @@ static struct patricia_node * patricia_lookup2(struct patricia_tree * self, stru
         glue = patricia_node_calloc(self);
         glue->prefix = 0;
         glue->mask = diff_mask;
-        glue->parent = node->parent;
 
-        if (diff_mask < self->maxbits && BIT_TEST(prefix_addr[diff_mask>>3], _patricia_nbit(diff_mask)))
+        if (diff_mask < self->maxbits && patricia_bit_test(prefix_addr, diff_mask))
         {
             glue->right = new_node;
             glue->left = node;
@@ -419,23 +482,72 @@ static struct patricia_node * patricia_lookup2(struct patricia_tree * self, stru
             glue->right = node;
             glue->left = new_node;
         }
+        patricia_insert(self, glue, node);
         new_node->parent = glue;
-        if (node->parent == 0)
-        {
-            self->root = glue;
-        }
-        else if (node->parent->right == node)
-        {
-            node->parent->right= glue;
-        }
-        else
-        {
-            node->parent->left = glue;
-        }
-        node->parent = glue;
 
     }
     return new_node;
+}
+
+static struct patricia_node * patricia_search_best(const struct patricia_tree * self, const struct prefix * prefix)
+{
+    struct patricia_node * stack[PATRICIA_MAXBITS+1];
+    int32_t cnt = 0;
+    struct patricia_node * node;
+
+    assert(prefix);
+    assert(prefix->mask <= self->maxbits);
+
+    if (!self->root)
+    {
+        return 0;
+    }
+
+    node = self->root;
+    const uint8_t * prefix_addr = prefix_to_networkorder_bytes(prefix);
+    uint8_t prefix_mask = prefix->mask;
+
+    cnt = 0;
+    for (;node && (node->mask < prefix_mask);)
+    {
+        if (node->prefix)
+        {
+            stack[cnt++] = node;
+        }
+
+        if (patricia_bit_test(prefix_addr,node->mask))
+        {
+            node = node->right;
+        }
+        else
+        {
+            node = node->left;
+        }
+    }
+
+    /* 这里可以控制查找是否包括自身，比如要查找 1.1.0.0/16 ，如果该值已经被 lookup(学习),这句话可以控制是否把
+      查找树中的 1.1.0.0/16 也加入查找
+    */
+    if (node && node->prefix)
+    {
+        stack[cnt++] = node;
+    }
+
+    if (cnt <= 0)
+    {
+        return 0;
+    }
+
+    for (;--cnt>=0;)
+    {
+        node = stack[cnt];
+
+        if (comp_with_mask(prefix_to_networkorder_bytes(prefix),prefix_to_networkorder_bytes(node->prefix),node->prefix->mask))
+        {
+            return node;
+        }
+    }
+    return 0;
 }
 
 void patricia_remove(struct patricia_tree * self, struct patricia_node * rm)
@@ -445,14 +557,14 @@ void patricia_remove(struct patricia_tree * self, struct patricia_node * rm)
 
     if (rm->left && rm->right)
     {
+        // Make as a glue.
         if (rm->prefix)
         {
             rm->prefix = 0;
         }
-        return ;
     }
 
-    if (rm->right ==0 &&  rm->left ==0)
+    else if (rm->right ==0 &&  rm->left ==0)
     {
         parent = rm->parent;
         patricia_node_free(self,rm);
@@ -494,28 +606,106 @@ void patricia_remove(struct patricia_tree * self, struct patricia_node * rm)
         }
         child->parent = parent->parent;
         patricia_node_free(self, parent);
+
+    }
+    else
+    {
+        child = rm->left ? rm->left : rm->right;
+
+        parent = rm->parent;
+        child->parent = parent;
+
+        patricia_node_free(self, rm);
+
+        if (parent == 0)
+        {
+            assert(self->root == rm);
+            self->root = child;
+        }
+        else if (parent->right == rm)
+        {
+            parent->right = child;
+        }
+        else {
+            parent->left = child;
+        }
+
+    }
+}
+
+void patricia_node_fprintf(const struct patricia_node * self, FILE * f)
+{
+    fprintf(f, "%u-", self->mask);
+    if (self->prefix)
+    {
+        prefix_fprintf(self->prefix, f);
+    }
+    else
+    {
+        fprintf(f, "null");
+    }
+}
+
+static void tree_fprintf_1(const struct patricia_node * node, int space, FILE * f)
+{
+    if (!node)
+    {
         return;
-
     }
+    const int count = 10;
+    space += count;
 
-    child = rm->left ? rm->left : rm->right;
+    tree_fprintf_1(node->right, space, f);
 
-    parent = rm->parent;
-    child->parent = parent;
+    fprintf(f,"%s", "\n");
+    int i;
+    for (i = count; i < space; i += 1) fprintf(f, " ");
+    patricia_node_fprintf(node, f);
+    fprintf(f, "%s", "\n");
+    tree_fprintf_1(node->left, space, f);
+}
 
-    patricia_node_free(self, rm);
+void tree_fprintf(const struct patricia_node * node, FILE * f)
+{
+    fprintf(f,"%s", "-------------------------------------------\n");
+    tree_fprintf_1(node, 0, f);
+}
 
-    if (parent == 0)
-    {
-        assert(self->root == rm);
-        self->root = child;
-    }
-    else if (parent->right == rm)
-    {
-        parent->right = child;
-    }
-    else {
-        parent->left = child;
-    }
 
+struct patricia_node * patricia_lookup2(struct patricia_tree * self, const char * p)
+{
+    return patricia_lookup1(self, p, p + strlen(p));
+}
+
+struct patricia_node * patricia_lookup1(struct patricia_tree * self, const char * begin, const char * end)
+{
+    struct prefix t;
+    memset(&t, 0, sizeof(t));
+    prefix_ascii2prefix(&t, begin, end);
+    return patricia_lookup(self, &t);
+}
+
+struct patricia_node * patricia_search_exact1(const struct patricia_tree * self, const char * begin, const char * end)
+{
+    struct prefix t;
+    memset(&t, 0, sizeof(t));
+    prefix_ascii2prefix(&t, begin, end);
+    return patricia_search_exact(self, &t);
+}
+struct patricia_node * patricia_search_exact2(const struct patricia_tree * self, const char * p)
+{
+    return patricia_search_exact1(self, p, p + strlen(p));
+}
+
+struct patricia_node * patricia_search_best1(const struct patricia_tree * self, const char * begin, const char * end)
+{
+    struct prefix t;
+    memset(&t, 0, sizeof(t));
+    prefix_ascii2prefix(&t, begin, end);
+    return patricia_search_best(self, &t);
+}
+
+struct patricia_node * patricia_search_best2(const struct patricia_tree * self, const char * p)
+{
+    return patricia_search_best1(self, p, p + strlen(p));
 }

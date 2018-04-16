@@ -42,14 +42,16 @@ typedef void (*void_fn_t)();
 /* { from mrt.h */
 
 typedef struct _prefix4_t {
+    char sin_str[16];
     u_short family;		/* AF_INET | AF_INET6 */
     u_short bitlen;		/* same as mask? */
     int ref_count;		/* reference count */
     struct in_addr sin;
-    char sin_str[16];
+    
 } prefix4_t;
 
 typedef struct _prefix_t {
+    char sin_str[16];
     u_short family;		/* AF_INET | AF_INET6 */
     u_short bitlen;		/* same as mask? */
     int ref_count;		/* reference count */
@@ -59,7 +61,7 @@ typedef struct _prefix_t {
 		struct in6_addr sin6;
 #endif /* IPV6 */
     } add;
-    char sin_str[16];
+    
 } prefix_t;
 
 /* } */
