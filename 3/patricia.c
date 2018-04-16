@@ -150,7 +150,7 @@ void patricia_tree_iterator_set(struct patricia_tree_iterator * self, const stru
     self->rn = tree->root;
 }
 
-/* Only iterator the node have prefix, not include glue node. */
+/* Iterator all kind of node, include glue node. */
 struct patricia_node * patricia_tree_iterator_next(struct patricia_tree_iterator * self, struct patricia_node ** out)
 {
     *out = 0;
@@ -191,14 +191,8 @@ struct patricia_node * patricia_tree_iterator_next(struct patricia_tree_iterator
         /* Not have avaliable node. */
         self->rn = NULL;
     }
-
-    if ((*out)->prefix == 0)
-    {
-        return patricia_tree_iterator_next(self, out);
-    }
     return *out;
 }
-
 
 static struct patricia_node * patricia_search_exact(const struct patricia_tree * self, const struct prefix * prefix)
 {
@@ -326,7 +320,8 @@ static uint32_t patricia_diff_mask(struct patricia_tree * self, const struct pat
     return diff_mask;
 }
 
-static uint8_t patricia_bit_test(const uint8_t * addr, uint8_t mask)
+/* TODO 还是没找到它的解释，它是怎么在 right left 中选路的 */
+static inline uint8_t patricia_bit_test(const uint8_t * addr, uint8_t mask)
 {
     uint8_t a = addr[mask >> 3];
     /* 0x80 is one bit */
@@ -665,10 +660,10 @@ static void tree_fprintf_1(const struct patricia_node * node, int space, FILE * 
     tree_fprintf_1(node->left, space, f);
 }
 
-void tree_fprintf(const struct patricia_node * node, FILE * f)
+void tree_fprintf(const struct patricia_tree * self, FILE * f)
 {
-    fprintf(f,"%s", "-------------------------------------------\n");
-    tree_fprintf_1(node, 0, f);
+    fprintf(f,"-------------------------------------------\ncount=%u\n", self->pool.active_count);
+    tree_fprintf_1(self->root, 0, f);
 }
 
 

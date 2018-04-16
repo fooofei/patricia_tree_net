@@ -94,7 +94,7 @@ void patricia_tree_iterator_set(struct patricia_tree_iterator * self, const stru
 struct patricia_node * patricia_tree_iterator_next(struct patricia_tree_iterator * self, struct patricia_node ** out);
 
 /* 左旋转 90 度打印树. */
-void tree_fprintf(const struct patricia_node * node, FILE * f);
+void tree_fprintf(const struct patricia_tree * self, FILE * f);
 
 
 #endif /* _PATRICIA_H */

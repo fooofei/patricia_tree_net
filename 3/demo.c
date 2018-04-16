@@ -52,12 +52,12 @@ void test()
 
     patricia_lookup2(root, "10.0.0.0/8");
     patricia_lookup2(root, "10.0.0.0/9");
-    tree_fprintf(root->root,  stdout);
+    tree_fprintf(root,  stdout);
 
     patricia_lookup2(root, "10.0.0.0/9");
 
     patricia_lookup2(root, "11.1.1.1/32");
-    tree_fprintf(root->root, stdout);
+    tree_fprintf(root, stdout);
 
     patricia_clear(root);
 
@@ -160,10 +160,11 @@ void test1()
 
     for (i=1;0!=cidrs[i];i+=1)
     {
+        tree_fprintf(root, stdout);
         patricia_lookup2(root, cidrs[i]);
     }
 
-    tree_fprintf(root->root, stdout);
+    tree_fprintf(root, stdout);
 
     find = patricia_search_best2(root, "10.42.42.0/24");
     EXPECT(0 == strcmp(find->prefix->string, cidrs[1]));
@@ -181,7 +182,7 @@ void test1()
 
 
     //
-    tree_fprintf(root->root, stdout);
+    tree_fprintf(root, stdout);
 
     patricia_clear(root);
 }
@@ -219,7 +220,7 @@ void test_remove()
         patricia_lookup2(root, cidrs[i]);
     }
 
-    tree_fprintf(root->root, stdout);
+    tree_fprintf(root, stdout);
 
     struct patricia_tree_iterator it;
     memset(&it, 0, sizeof(it));
@@ -229,7 +230,10 @@ void test_remove()
 
     for (;patricia_tree_iterator_next(&it,&find);)
     {
-        vec[cnt++] = find;
+        if (find->prefix)
+        {
+            vec[cnt++] = find;
+        }
     }
     
 
@@ -239,7 +243,7 @@ void test_remove()
         patricia_node_fprintf(vec[cnt], stdout);
         fprintf(stdout, "%s", "\n");
         patricia_remove(root, vec[cnt]);
-        tree_fprintf(root->root, stdout);
+        tree_fprintf(root, stdout);
     }
 
     //
@@ -255,7 +259,7 @@ main(void)
     memset(&dbg_leak, 0, sizeof(dbg_leak));
     crt_dbg_leak_lock(&dbg_leak);
 
-    test_remove();
+    test1();
 
     crt_dbg_leak_unlock(&dbg_leak);
     return 0;
