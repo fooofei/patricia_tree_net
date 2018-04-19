@@ -72,9 +72,13 @@ void patricia_clear(struct patricia_tree *);
 /* Insert prefix to tree.
    Return the new node contain the prefix or old node contain the prefix.
    The prefix is almost same, e.g. will find 10.0.0.0/9 for 10.1.0.0/9.
+   同 1 个 IP 不会学习两遍。
 */
 struct patricia_node * patricia_lookup1(struct patricia_tree *, const char * begin, const char * end);
+/* Lookup string the format of IP/MASK. */
 struct patricia_node * patricia_lookup2(struct patricia_tree *, const char * p);
+/* Lookup string the format of IP1/MASK1,IP2 */
+void patricia_lookup3(struct patricia_tree *, const char * p);
 void patricia_remove(struct patricia_tree * self, struct patricia_node *);
 
 struct patricia_node * patricia_search_exact1(const struct patricia_tree *, const char * begin, const char * end);

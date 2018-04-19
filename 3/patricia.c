@@ -54,7 +54,7 @@ int prefix_ascii2prefix(struct prefix * self, const char * begin, const char * e
 
     if (!(begin < sep))
     {
-        return 0;
+        return -1;
     }
     snprintf(temp.sin_str, sizeof(temp.sin_str), "%.*s", (int)(sep - begin), begin);
     ipaddr_pton(temp.sin_str, &temp.sin);
@@ -109,38 +109,6 @@ void prefix_format(struct prefix * self)
     snprintf(self->sin_str, sizeof(self->sin_str), "%s", p);
     snprintf(self->string, sizeof(self->string), "%s/%u", p, self->mask);
     free(p);
-}
-
-void patricia_init(struct patricia_tree * self)
-{
-    memset(self, 0, sizeof(*self));
-    self->maxbits = 32;
-    self->pool.ptr = calloc(3000, sizeof(struct patricia_node));
-    self->pool.capacity = 3000;
-}
-
-void patricia_clear(struct patricia_tree * self)
-{
-    struct patricia_tree_iterator it;
-    memset(&it, 0, sizeof(it));
-    struct patricia_node * cur = 0;
-
-    patricia_tree_iterator_set(&it, self);
-
-
-    for (; patricia_tree_iterator_next(&it, &cur);)
-    {
-        patricia_node_free(self, cur);
-    }
-
-
-    assert(self->pool.active_count == 0);
-
-    if (self->pool.ptr)
-    {
-        free(self->pool.ptr); self->pool.ptr = 0;
-    }
-
 }
 
 void patricia_tree_iterator_set(struct patricia_tree_iterator * self, const struct patricia_tree * tree)
@@ -251,6 +219,38 @@ struct patricia_node *  patricia_node_calloc(struct patricia_tree * self)
     r->is_alloced = 1;
     r->prefix = &r->_a;
     return r;
+
+}
+
+void patricia_init(struct patricia_tree * self)
+{
+    memset(self, 0, sizeof(*self));
+    self->maxbits = 32;
+    self->pool.ptr = calloc(3000, sizeof(struct patricia_node));
+    self->pool.capacity = 3000;
+}
+
+void patricia_clear(struct patricia_tree * self)
+{
+    struct patricia_tree_iterator it;
+    memset(&it, 0, sizeof(it));
+    struct patricia_node * cur = 0;
+
+    patricia_tree_iterator_set(&it, self);
+
+
+    for (; patricia_tree_iterator_next(&it, &cur);)
+    {
+        patricia_node_free(self, cur);
+    }
+
+
+    assert(self->pool.active_count == 0);
+
+    if (self->pool.ptr)
+    {
+        free(self->pool.ptr); self->pool.ptr = 0;
+    }
 
 }
 
@@ -439,10 +439,12 @@ static struct patricia_node * patricia_lookup(struct patricia_tree * self, const
         if (node->mask < self->maxbits 
             && patricia_bit_test(prefix_addr,node->mask))
         {
+            assert(node->right == NULL);
             node->right = new_node;
         }
         else
         {
+            assert(node->left == NULL);
             node->left = new_node;
         }
         return new_node;
@@ -458,7 +460,9 @@ static struct patricia_node * patricia_lookup(struct patricia_tree * self, const
         {
             new_node->left = node;
         }
+
         patricia_insert(self, new_node, node);
+        
     }
     else
     {
@@ -678,6 +682,31 @@ struct patricia_node * patricia_lookup1(struct patricia_tree * self, const char 
     memset(&t, 0, sizeof(t));
     prefix_ascii2prefix(&t, begin, end);
     return patricia_lookup(self, &t);
+}
+
+void patricia_lookup3(struct patricia_tree * self, const char * p)
+{
+    size_t psize = strlen(p);
+    char * copy = calloc(psize + 1 + 1, 1);
+    memcpy(copy, p, psize);
+    copy[psize] = ',';
+
+    const char * b = copy;
+    const char * e = copy + psize + 1;
+    const char * ce;
+
+    for (ce=b;ce<e;ce+=1)
+    {
+        if (*ce ==',')
+        {
+            if (b < ce)
+            {
+                patricia_lookup1(self, b, ce);
+            }
+            b = ce + 1;
+        }
+    }
+    free(copy);
 }
 
 struct patricia_node * patricia_search_exact1(const struct patricia_tree * self, const char * begin, const char * end)
