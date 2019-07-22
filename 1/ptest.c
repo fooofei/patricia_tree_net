@@ -228,7 +228,7 @@ void test2()
 
 int main(int argc, char **argv)
 {
-
+    test1(argc, argv);
 
     return 0;
 }
