@@ -17,7 +17,7 @@ struct prefix
 
 
 int prefix_format(struct prefix* p, const char* str);
-int prefix_fprintf(struct prefix* p, FILE* f);
+int prefix_fprintf(FILE * f, struct prefix* p);
 bool prefix_cmp(struct prefix* p1, struct prefix* p2, uint8_t maskbit);
 
 

@@ -11,7 +11,11 @@ https://github.com/tobez/Net-Patricia/blob/master/libpatricia/patricia.c
 
 
 #include "crt_dbg_leak.h"
+extern "C" {
 #include "patricia/tree.h"
+#include "patricia/iterator.h"
+}
+
 
 
 #define EXPECT(expr) \
@@ -26,13 +30,13 @@ https://github.com/tobez/Net-Patricia/blob/master/libpatricia/patricia.c
 
 typedef std::list<struct patnode*> list_node_t;
 
-static void patree_format_m(list_node_t& nodes, struct patree* root, const char* str)
+static void patree_format_m(list_node_t& nodes, struct patree* tree, const char* str)
 {
     struct patnode* node;
     struct patnode* rc_node;
     node = (struct patnode*)calloc(1, sizeof(struct patnode));
     rc_node = patnode_format(node, str);
-    rc_node = patree_lookup(root, node);
+    rc_node = patree_lookup(tree, node);
     nodes.push_back(node);
 }
 
@@ -66,12 +70,12 @@ void test()
     for (p = cidrs; *p != NULL; p++) {
         patree_format_m(nodes, tree, *p);
     }
-    patree_fprintf(tree, stdout);
+    patree_table(stdout, tree);
 
     patree_format_m(nodes, tree, "10.0.0.0/9");
 
     patree_format_m(nodes, tree, "11.1.1.1/32");
-    patree_fprintf(tree, stdout);
+	patree_table(stdout, tree);
 
     patree_term(nodes);
 
@@ -238,21 +242,19 @@ void test1()
     find = patree_search_exact(tree, "10.0.0.0/8");
     EXPECT(0 == strcmp(find->prefix->string, cidrs[3]));
 
-
+	patree_table(stdout, tree);
     //
-    patree_fprintf(tree, stdout); fflush(stdout);
-
     patree_term(nodes);
 }
 
-#if 0
 
-void test_remove()
+void test3()
 {
-    struct patricia_tree mroot;
+    struct patree mroot;
     memset(&mroot, 0, sizeof(mroot));
-    struct patricia_tree* root = &mroot;
-    struct patricia_node* find;
+    struct patree * tree = &mroot;
+    struct patnode* find;
+    list_node_t nodes;
     int i;
     const char* cidrs[] = {
         "127.0.0.0/8",
@@ -270,23 +272,23 @@ void test_remove()
     };
 
 
-    patricia_init(root);
+    patree_init(tree);
     //
 
 
     for (i = 0; 0 != cidrs[i]; i += 1) {
-        patricia_lookup2(root, cidrs[i]);
+        patree_format_m(nodes, tree, cidrs[i]);
     }
 
-    tree_fprintf(root, stdout);
+    patree_table(stdout, tree);
 
-    struct patricia_tree_iterator it;
+    struct patree_iterator it;
     memset(&it, 0, sizeof(it));
-    patricia_tree_iterator_set(&it, root);
-    struct patricia_node* vec[1024] = { 0 };
-    int32_t cnt = 0;
+    patree_iter_set(&it, tree);
+    struct patnode* vec[1024] = { 0 };
+    int cnt = 0;
 
-    for (; patricia_tree_iterator_next(&it, &find);) {
+    for (; patree_iter_next(&it, &find);) {
         if (find->prefix) {
             vec[cnt++] = find;
         }
@@ -295,28 +297,24 @@ void test_remove()
 
     for (; --cnt >= 0;) {
         fprintf(stdout, "%s", "\n-----------------------------\nRemove: ");
-        patricia_node_fprintf(vec[cnt], stdout);
+        patnode_fprintf(stdout, vec[cnt]);
         fprintf(stdout, "%s", "\n");
-        patricia_remove(root, vec[cnt]);
-        tree_fprintf(root, stdout);
     }
 
     //
-
-    patricia_clear(root);
+    patree_term(nodes);
 }
 
-#endif
 
-
-int
-main(void)
+int main(void)
 {
     struct _crt_dbg_leak dbg_leak;
     memset(&dbg_leak, 0, sizeof(dbg_leak));
     crt_dbg_leak_lock(&dbg_leak);
 
     test();
+    test1();
+    test3();
 
     crt_dbg_leak_unlock(&dbg_leak);
     return 0;

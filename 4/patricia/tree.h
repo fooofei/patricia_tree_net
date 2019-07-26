@@ -42,12 +42,13 @@ struct patree
     struct patnode* root;
     uint32_t maxbits;/* for IP, 32 bit addresses  难道这个是所有结点的最大 mask ？ */
     int node_cnt;
+    int glue_cnt;
 };
 
 
 
 
-void patnode_fprintf(const struct patnode* node, FILE* f);
+void patnode_fprintf(FILE *f, const struct patnode* node);
 
 
 void patree_init(struct patree* tree);
@@ -72,8 +73,8 @@ struct patnode* patree_search_exact(const struct patree* tree, const char* p);
 struct patnode* patree_search_best(const struct patree* tree, const char* p);
 
 /* 左旋转 90 度打印树. */
-void patree_fprintf(const struct patree* tree, FILE* f);
+void patree_fprintf(FILE * f, const struct patree* tree);
 
-
+void patree_table(FILE * f, const struct patree* tree);
 
 #endif /* _PATRICIA_H */

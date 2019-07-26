@@ -2,6 +2,8 @@
 
 #include "iterator.h"
 
+#include <string.h>
+
 
 void patree_iter_set(struct patree_iterator* it, const struct patree* tree)
 {
@@ -22,7 +24,7 @@ struct patnode* patree_iter_next(struct patree_iterator* it, struct patnode** ou
     // advance
     struct patnode* left;
     struct patnode* right;
-    //
+
     left = it->next->left;
     right = it->next->right;
 

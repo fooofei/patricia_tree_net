@@ -26,7 +26,8 @@ static uint32_t maskbit2host(uint8_t maskbit)
     uint32_t v;
 
     mask = min(max_mask, maskbit);
-    v = (0x01 << (max_mask - mask)) - 1;
+    v = 0x01;
+    v = (v << (max_mask - mask)) - 1;
     v = ~v;
     return v;
 }
@@ -71,7 +72,7 @@ int prefix_format(struct prefix* p, const char* str)
         snprintf(s, sizeof(s), "%s", sep+1);
         uint64_t number;
         number = (uint64_t)strtol(s, 0, 10);
-        if (number >= UINT8_MAX) {
+        if (number <=0 || number > sizeof(struct in_addr)*8) {
             return -1;
         }
         p->maskbit = (uint8_t)number;
@@ -88,7 +89,7 @@ int prefix_format(struct prefix* p, const char* str)
     return 0;
 }
 
-int prefix_fprintf(struct prefix* p, FILE* f)
+int prefix_fprintf(FILE * f, struct prefix* p)
 {
     return fprintf(f, "%s", p->string);
 }

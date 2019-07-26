@@ -8,7 +8,7 @@ if(APPLE)
     set(CMAKE_MACOSX_RPATH 0)
 endif()
 
-set(BINARY_NAME mtest)
+set(BINARY_NAME trie)
 
 set(Source_files 
     ${CMAKE_CURRENT_LIST_DIR}/patricia/tree.c

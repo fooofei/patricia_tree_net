@@ -25,8 +25,8 @@
 
 
 
-/* Find the first different mask of curnode->prefix and prefix.
-   The return value is starts from 0.
+/* Find the first different mask of p1 and p2.
+   The return value is starts from 1.
 */
 
 static uint8_t diff_mask(struct patree* tree, const struct prefix* p1,
@@ -34,17 +34,17 @@ static uint8_t diff_mask(struct patree* tree, const struct prefix* p1,
 {
     uint32_t h1 = p1->host;
     uint32_t h2 = p2->host;
-    h1 = htonl(h1);
-    h2 = htonl(h2);
-    uint8_t* addr1 = (uint8_t*) & (h1);
-    uint8_t* addr2 = (uint8_t*) & (h2);
+    uint32_t n1 = htonl(h1);
+    uint32_t n2 = htonl(h2);
+
+    uint8_t* addr1 = (uint8_t*) & (n1);
+    uint8_t* addr2 = (uint8_t*) & (n2);
     uint8_t chk_maskbit = min(p1->maskbit, p2->maskbit);
     uint8_t diff_bit = 0;
-    uint8_t i;
+    uint8_t i=0;
     uint8_t diff_byte;
-    uint8_t j;
+    uint8_t j=0;
 
-    // diff mask 应该叫 diff mask start
     for (i = 0; i * 8 < chk_maskbit; i += 1) {
         // 从左到右找
         diff_byte = (addr1[i] ^ addr2[i]);
@@ -98,7 +98,7 @@ static void patree_insert(struct patree* tree, struct patnode* newnode, struct p
     child->parent = newnode;
 }
 
-static void patree_fprintf1(const struct patnode* node, int space, FILE* f , int * dep)
+static void patree_fprintf1(FILE * f, const struct patnode* node, int space, int * dep)
 {
     if (!node) {
         return;
@@ -107,16 +107,32 @@ static void patree_fprintf1(const struct patnode* node, int space, FILE* f , int
     const int count = 10;
     space += count;
 
-    patree_fprintf1(node->right, space, f, dep);
+    patree_fprintf1(f, node->right, space, dep);
 
     fprintf(f, "%s", "\n");
     int i;
     for (i = count; i < space; i += 1) {
         fprintf(f, " ");
     }
-    patnode_fprintf(node, f);
+    patnode_fprintf(f, node);
     fprintf(f, "%s", "\n");
-    patree_fprintf1(node->left, space, f, dep);
+    patree_fprintf1(f, node->left, space, dep);
+    (*dep)--;
+}
+
+
+static void patree_table1(FILE * f, const struct patnode* node, int space, int * dep)
+{
+    if (!node) {
+        fprintf(f, "\n");
+        return;
+    }
+    (*dep)++;
+    patnode_fprintf(f, node);
+    fprintf(f, "  ");
+    patree_table1(f, node->left, space, dep);
+    //fprintf(f, "%s", "\n");
+    patree_table1(f, node->right, space, dep);
     (*dep)--;
 }
 
@@ -326,8 +342,6 @@ struct patnode* patree_lookup(struct patree* tree, struct patnode* lkp_node)
         }
         glue->maskbit = diff_bit;
 
-        printf("tree->node_cnt=%d maskbit=%u\n", tree->node_cnt, diff_bit); fflush(stdout);
-
         if (diff_bit < tree->maxbits &&
             test_maskbit(tree, lkp_host, diff_bit)) {
             glue->left = fstnode;
@@ -339,25 +353,35 @@ struct patnode* patree_lookup(struct patree* tree, struct patnode* lkp_node)
         patree_insert(tree, glue, fstnode);
         lkp_node->parent = glue;
         tree->node_cnt++;
+        tree->glue_cnt++;
     }
     return lkp_node;
 }
 
-void patree_fprintf(const struct patree* tree, FILE* f)
+void patree_fprintf(FILE * f, const struct patree* tree)
 {
-    fprintf(f, "-------------------------------------------\ncount=%d\n", tree->node_cnt);
+    fprintf(f, "-------------------------------------------\n");
+    fprintf(f, "node=%d glue=%d\n", tree->node_cnt, tree->glue_cnt);
     int dep = 0;
-    patree_fprintf1(tree->root, 0, f, &dep);
+    patree_fprintf1(f, tree->root, 0, &dep);
 }
 
-void patnode_fprintf(const struct patnode* node, FILE* f)
+void patnode_fprintf(FILE * f, const struct patnode* node)
 {
     fprintf(f, "%u-", node->maskbit);
     if (node->prefix) {
-        prefix_fprintf(node->prefix, f);
+        prefix_fprintf(f, node->prefix);
     } else {
         fprintf(f, "<glue>");
     }
+}
+
+void patree_table(FILE * f, const struct patree* tree)
+{
+    fprintf(f, "-------------------------------------------\n");
+    fprintf(f, "node=%d glue=%d\n", tree->node_cnt, tree->glue_cnt);
+    int dep = 0;
+    patree_table1(f, tree->root, 0, &dep);
 }
 
 void patree_init(struct patree* tree)
@@ -365,6 +389,7 @@ void patree_init(struct patree* tree)
     memset(tree, 0, sizeof(*tree));
     tree->maxbits = 32;
     tree->node_cnt = 0;
+    tree->glue_cnt = 0;
 }
 
 struct patnode* patnode_format(struct patnode* node, const char* str)
