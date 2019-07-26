@@ -26,7 +26,7 @@ static uint32_t maskbit2host(uint8_t maskbit)
     uint32_t v;
 
     mask = min(max_mask, maskbit);
-    v = (0x01 << (max_mask - mask))-1;
+    v = (0x01 << (max_mask - mask)) - 1;
     v = ~v;
     return v;
 }
@@ -35,16 +35,15 @@ static uint32_t maskbit2host(uint8_t maskbit)
 static void prefix_floor_mask(struct prefix* p)
 {
     uint32_t h;
-    uint32_t n;
     uint32_t maskh;
     const uint8_t max_mask = sizeof(uint32_t) * 8;
 
     maskh = maskbit2host(p->maskbit);
-    h = ntohl(p->sin);
+    h = p->host;
     h = h & maskh;
-    n = htonl(h);
-    if (n != p->sin) {
-        p->sin = n;
+    if (h != p->host) {
+        p->host = h;
+        p->sin = htonl(p->host);
         p->maskbit = min(max_mask, p->maskbit);
         inet_ntop(AF_INET, &p->sin, p->sin_str, sizeof(p->sin_str));
     }
@@ -64,26 +63,28 @@ int prefix_format(struct prefix* p, const char* str)
 
     }
 
-    if (*sep == 0) {
-        return -1;
+    if (*sep) {
+        if (*(sep+1) == 0) {
+            return -1;
+        }
+        char s[10] = { 0 };
+        snprintf(s, sizeof(s), "%s", sep+1);
+        uint64_t number;
+        number = (uint64_t)strtol(s, 0, 10);
+        if (number >= UINT8_MAX) {
+            return -1;
+        }
+        p->maskbit = (uint8_t)number;
+    } else {
+        p->maskbit = 32;
+        sep = str + strlen(str);
     }
-    snprintf(p->sin_str, sizeof(p->sin_str), "%.*s", (int)(sep-str), str);
-    sep++;
-    if (*sep == 0) {
-        return -1;
-    }
-    char s[10] = { 0 };
-    snprintf(s, sizeof(s), "%s", sep);
-    uint64_t number;
-    number = (uint64_t)strtol(s, 0, 10);
-    if (number >= UINT8_MAX) {
-        return -1;
-    }
-    p->maskbit = (uint8_t)number;
+
+    snprintf(p->sin_str, sizeof(p->sin_str), "%.*s", (int)(sep - str), str);
     inet_pton(AF_INET, p->sin_str, &p->sin);
+    p->host = ntohl(p->sin);
     prefix_floor_mask(p);
     snprintf(p->string, sizeof(p->string), "%s/%u", p->sin_str, p->maskbit);
-    p->host = ntohl(p->sin);
     return 0;
 }
 
@@ -92,16 +93,13 @@ int prefix_fprintf(struct prefix* p, FILE* f)
     return fprintf(f, "%s", p->string);
 }
 
-bool prefix_cmp(struct prefix * p1, struct prefix * p2)
+bool prefix_cmp(struct prefix* p1, struct prefix* p2, uint8_t maskbit)
 {
-    if(p1->maskbit != p2->maskbit){
-        return false;
-    }
     uint32_t h1 = p1->host;
     uint32_t h2 = p2->host;
     uint32_t mask;
     mask = 0xFFFFFFFFu;
-    mask = mask >> p1->maskbit;
+    mask = mask >> maskbit;
     mask = ~mask;
     h1 = h1 & mask;
     h2 = h2 & mask;

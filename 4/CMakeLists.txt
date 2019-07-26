@@ -1,4 +1,6 @@
 
+# cmake -DCMAKE_BUILD_TYPE=Debug -G "Visual Studio 16 2019" -A Win32 ..
+
 cmake_minimum_required(VERSION 3.1)
 project(patricia)
 
@@ -26,4 +28,8 @@ source_group(files FILES ${Source_files})
 
 if(WIN32)
 	target_compile_options(${BINARY_NAME} PRIVATE /source-charset:utf-8 /execution-charset:utf-8)
+	target_compile_definitions(${BINARY_NAME} PRIVATE "WIN32")
+	if(MSVC)
+        set_property(TARGET ${BINARY_NAME}  APPEND PROPERTY LINK_FLAGS /DEBUG)
+    endif()
 endif()

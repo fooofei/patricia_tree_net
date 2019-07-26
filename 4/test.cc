@@ -219,12 +219,10 @@ void test1()
     //f = fopen("D:\\1.txt", "wb");
 
     for (i = 1; 0 != cidrs[i]; i += 1) {
-        patree_fprintf(tree, stdout); fflush(stdout);
         patree_format_m(nodes, tree, cidrs[i]);
     }
     //fclose(f);
 
-    patree_fprintf(tree, stdout);
 
     find = patree_search_best(tree, "10.42.42.0/24");
     EXPECT(0 == strcmp(find->prefix->string, cidrs[1]));

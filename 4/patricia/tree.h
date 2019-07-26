@@ -31,7 +31,7 @@ struct patnode
     struct patnode* right;
     struct patnode* parent;
     uint8_t maskbit;  /* 不一定等于 prefix->mask  可能是其他 */
-    struct prefix * prefix;
+    struct prefix* prefix;
     const char* prefix_string;
     struct prefix _a;
 };
@@ -45,40 +45,35 @@ struct patree
 };
 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 
-    void patnode_fprintf(const struct patnode* node, FILE* f);
+void patnode_fprintf(const struct patnode* node, FILE* f);
 
 
-    void patree_init(struct patree* tree);
+void patree_init(struct patree* tree);
 
-    /* Insert prefix to tree.
-       Return the new node contain the prefix or old node contain the prefix.
-       The prefix is almost same, e.g. will find 10.0.0.0/9 for 10.1.0.0/9.
-       同 1 个 IP 不会学习两遍。
+/* Insert prefix to tree.
+    Return the new node contain the prefix or old node contain the prefix.
+    The prefix is almost same, e.g. will find 10.0.0.0/9 for 10.1.0.0/9.
+    同 1 个 IP 不会学习两遍。
 
-    Lookup string the format of IP/MASK. 
-    node contains prefix
-    */
-    struct patnode* patree_lookup(struct patree* tree, struct patnode *node);
+Lookup string the format of IP/MASK.
+node contains prefix
+*/
+struct patnode* patree_lookup(struct patree* tree, struct patnode* node);
 
-    // Format IP/Mask to struct patnode
-    // return node  for success,
-    // return NULL for fail
-    struct patnode* patnode_format(struct patnode* node, const char* str);
+// Format IP/Mask to struct patnode
+// return node  for success,
+// return NULL for fail
+struct patnode* patnode_format(struct patnode* node, const char* str);
 
-    struct patnode* patree_search_exact(const struct patree* tree, const char* p);
-    
-    struct patnode* patree_search_best(const struct patree* tree, const char* p);
+struct patnode* patree_search_exact(const struct patree* tree, const char* p);
 
-    /* 左旋转 90 度打印树. */
-    void patree_fprintf(const struct patree* tree, FILE* f);
+struct patnode* patree_search_best(const struct patree* tree, const char* p);
 
-#ifdef __cplusplus
-}
-#endif
+/* 左旋转 90 度打印树. */
+void patree_fprintf(const struct patree* tree, FILE* f);
+
+
 
 #endif /* _PATRICIA_H */

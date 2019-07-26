@@ -14,19 +14,15 @@ struct patree_iterator
 };
 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-    void patree_iter_set(struct patree_iterator* it, const struct patree* tree);
-    // write next node to *out and return it
-    // return NULL for no next
-    struct patnode* patree_iter_next(struct patree_iterator* it, struct patnode** out);
 
 
-#ifdef __cplusplus
-}
-#endif
+void patree_iter_set(struct patree_iterator* it, const struct patree* tree);
+// write next node to *out and return it
+// return NULL for no next
+struct patnode* patree_iter_next(struct patree_iterator* it, struct patnode** out);
+
+
+
 
 
 #endif // !PATRICIA_ITERATOR_H
