@@ -291,13 +291,13 @@ struct patnode* patree_lookup(struct patree* tree, struct patnode* lkp_node)
     }
 
     if (diff_bit == fstnode->maskbit &&
-        fstnode->maskbit == lkp_node->maskbit) {
+        fstnode->maskbit == lkp_maskbit) {
         /* lookup 学习的 IP/MASK 是已经学习过的， 就会走到这里.
          如学习过 10.0.0.0/9, 再次 lookup  10.0.0.0/9 就会到这里，
          如学习过 10.0.0.0/9，再次 lookup  10.1.0.0/9(错误的值) 也会走到这里
        */
 
-       // DEBUG prefix
+        // fstnode->prefix ?
         return fstnode;
     }
     if (diff_bit == fstnode->maskbit) {
@@ -318,43 +318,42 @@ struct patnode* patree_lookup(struct patree* tree, struct patnode* lkp_node)
         return lkp_node;
     }
 
-    if (diff_bit == lkp_node->maskbit) {
+    if (diff_bit == lkp_maskbit) {
         uint32_t host;
         if (fstnode->prefix) {
             host = fstnode->prefix->host;
         } else {
             host = closest->prefix->host;
         }
-        if (lkp_node->maskbit < tree->maxbits &&
-            test_maskbit(tree, host, lkp_node->maskbit)) {
+        if (lkp_maskbit < tree->maxbits &&
+            test_maskbit(tree, host, lkp_maskbit)) {
             lkp_node->right = fstnode;
         } else {
             lkp_node->left = fstnode;
         }
         patree_insert(tree, lkp_node, fstnode);
         tree->node_cnt++;
-    } else {
-
-        // TODO memleak glue
-        struct patnode* glue = calloc(1, sizeof(struct patnode));
-        if (glue == NULL) {
-            return NULL;
-        }
-        glue->maskbit = diff_bit;
-
-        if (diff_bit < tree->maxbits &&
-            test_maskbit(tree, lkp_host, diff_bit)) {
-            glue->left = fstnode;
-            glue->right = lkp_node;
-        } else {
-            glue->left = lkp_node;
-            glue->right = fstnode;
-        }
-        patree_insert(tree, glue, fstnode);
-        lkp_node->parent = glue;
-        tree->node_cnt++;
-        tree->glue_cnt++;
+        return lkp_node;
     }
+    // TODO memleak glue
+    struct patnode* glue = calloc(1, sizeof(struct patnode));
+    if (glue == NULL) {
+        return NULL;
+    }
+    glue->maskbit = diff_bit;
+
+    if (diff_bit < tree->maxbits &&
+        test_maskbit(tree, lkp_host, diff_bit)) {
+        glue->left = fstnode;
+        glue->right = lkp_node;
+    } else {
+        glue->left = lkp_node;
+        glue->right = fstnode;
+    }
+    patree_insert(tree, glue, fstnode);
+    lkp_node->parent = glue;
+    tree->node_cnt++;
+    tree->glue_cnt++;
     return lkp_node;
 }
 
