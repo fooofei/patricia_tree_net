@@ -297,7 +297,7 @@ void test3()
 
 
     for (; --cnt >= 0;) {
-        fprintf(stdout, "%s", "\n-----------------------------\nRemove: ");
+        //fprintf(stdout, "%s", "\n-----------------------------\nRemove: ");
         patnode_fprintf(stdout, vec[cnt]);
         fprintf(stdout, "%s", "\n");
     }
@@ -343,9 +343,9 @@ void test_32bitmask()
     patree_init(tree);
 
     const char *cidrs[] = {
-            "127.127.127.127/32",
-            "128.128.128.128/32",
-            "129.129.129.129/32",
+            "127.128.128.128/32",
+            "228.227.229.226/32",
+            "209.129.128.126/32",
             NULL,
     };
 
@@ -354,7 +354,7 @@ void test_32bitmask()
         patree_format_m(nodes, tree, *pp);
     }
 
-    patree_search_best(tree, "129.129.129.129");
+    patree_search_best(tree, "209.129.128.126");
 
     patree_node_term(nodes, tree);
 }

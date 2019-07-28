@@ -119,21 +119,6 @@ static void patree_fprintf1(FILE *f, const struct patnode *node, int space, int 
 }
 
 
-static void patree_table1(FILE *f, const struct patnode *node, int space, int *dep)
-{
-    if (!node) {
-        fprintf(f, "\n");
-        return;
-    }
-    (*dep)++;
-    patnode_fprintf(f, node);
-    fprintf(f, "  ");
-    patree_table1(f, node->left, space, dep);
-    //fprintf(f, "%s", "\n");
-    patree_table1(f, node->right, space, dep);
-    (*dep)--;
-}
-
 //
 // static end
 //
@@ -397,7 +382,40 @@ void patree_table(FILE *f, const struct patree *tree)
     fprintf(f, "-------------------------------------------\n");
     fprintf(f, "node=%d glue=%d\n", tree->node_cnt, tree->glue_cnt);
     int dep = 0;
-    patree_table1(f, tree->root, 0, &dep);
+    struct patnode * stack[PATRICIA_MAXBITS+1]={0};
+    struct patnode ** stack_pointer;
+    struct patnode * node;
+
+    node = tree->root;
+    stack_pointer = stack;
+    for(;node;){
+        struct patnode* left;
+        struct patnode* right;
+
+        patnode_fprintf(f, node);
+
+        left = node->left;
+        right = node->right;
+
+        if (left) {
+            if (right) {
+                (*stack_pointer) = right;
+                stack_pointer++;
+            }
+            node = left;
+            fprintf(f, "  ");
+        } else if (right) {
+            node = right;
+            fprintf(f, "\n");
+        } else if (stack_pointer != stack) {
+            stack_pointer--;
+            node = *stack_pointer;
+            fprintf(f, "\n");
+        } else {
+            node = NULL;
+        }
+    }
+    fprintf(f,"\n");
 }
 
 void patree_init(struct patree *tree)

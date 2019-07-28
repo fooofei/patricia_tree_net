@@ -4,11 +4,15 @@
 #include <string.h>
 #include <stdlib.h>
 
+
 #ifdef WIN32
 #include <Ws2tcpip.h>
 #include <winsock.h>
 #else
 #include <arpa/inet.h>
+// endian.h locate where?
+//#include <machine/endian.h>
+#include <sys/types.h>
 #endif
 
 
@@ -94,14 +98,35 @@ int prefix_fprintf(FILE * f, struct prefix* p)
     return fprintf(f, "%s", p->string);
 }
 
+// maskbit >0
 bool prefix_cmp(struct prefix* p1, struct prefix* p2, uint8_t maskbit)
 {
     uint32_t h1 = p1->host;
     uint32_t h2 = p2->host;
+    union {
+        struct {
+            // on Windows always be little-endian
+#ifdef WIN32
+            uint32_t masklow;
+            uint32_t maskhigh;
+#else
+#if BYTE_ORDER == BIG_ENDIAN
+            uint32_t maskhigh;
+            uint32_t masklow;
+#else
+            uint32_t masklow;
+            uint32_t maskhigh;
+#endif
+#endif
+        };
+        uint64_t mask64;
+    }masku;
+    memset(&masku, 0, sizeof(masku));
     uint32_t mask;
-    mask = 0xFFFFFFFFu;
-    mask = mask >> maskbit;
-    mask = ~mask;
+    masku.maskhigh = 0xFFFFFFFFu;
+    masku.mask64 = masku.mask64 >> maskbit;
+    // masklow = ~maskhigh
+    mask = masku.masklow;
     h1 = h1 & mask;
     h2 = h2 & mask;
     return h1 == h2;
