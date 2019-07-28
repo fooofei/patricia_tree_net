@@ -320,6 +320,7 @@ void test_glue()
             "127.3.0.1/16",
             "127.42.42.0/24",
             "127.0.0.1/1",
+            "127.127.127.127/32",
             NULL,
     };
 
@@ -331,6 +332,32 @@ void test_glue()
     patree_node_term(nodes, tree);
 }
 
+void test_32bitmask()
+{
+    struct patree treem;
+    memset(&treem, 0, sizeof(treem));
+    struct patree *tree = &treem;
+    list_node_t nodes;
+    const char **pp;
+
+    patree_init(tree);
+
+    const char *cidrs[] = {
+            "127.127.127.127/32",
+            "128.128.128.128/32",
+            "129.129.129.129/32",
+            NULL,
+    };
+
+    pp = cidrs;
+    for (; (*pp); pp++) {
+        patree_format_m(nodes, tree, *pp);
+    }
+
+    patree_search_best(tree, "129.129.129.129");
+
+    patree_node_term(nodes, tree);
+}
 
 int main(void)
 {
@@ -338,6 +365,7 @@ int main(void)
     memset(&dbg_leak, 0, sizeof(dbg_leak));
     crt_dbg_leak_lock(&dbg_leak);
 
+    test_32bitmask();
     test_glue();
     test();
     test1();
