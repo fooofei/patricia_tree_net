@@ -1,9 +1,8 @@
 
 #include "prefix.h"
 
-#include <string.h>
 #include <stdlib.h>
-
+#include <string.h>
 
 #ifdef WIN32
 #include <Ws2tcpip.h>
@@ -15,12 +14,10 @@
 #include <sys/types.h>
 #endif
 
-
 #ifndef max
-#define max(a,b) (((a) (b)) ? (a) : (b))
-#define min(a,b) (((a) < (b)) ? (a) : (b))
+#define max(a, b) (((a)(b)) ? (a) : (b))
+#define min(a, b) (((a) < (b)) ? (a) : (b))
 #endif
-
 
 // convert mask 8 -> 0xFF 00 00 00
 static uint32_t maskbit2host(uint8_t maskbit)
@@ -65,18 +62,17 @@ int prefix_format(struct prefix* p, const char* str)
     const char* sep;
 
     for (sep = str; (*sep != 0) && (*sep != '/'); sep += 1) {
-
     }
 
     if (*sep) {
-        if (*(sep+1) == 0) {
+        if (*(sep + 1) == 0) {
             return -1;
         }
         char s[10] = { 0 };
-        snprintf(s, sizeof(s), "%s", sep+1);
+        snprintf(s, sizeof(s), "%s", sep + 1);
         uint64_t number;
         number = (uint64_t)strtol(s, 0, 10);
-        if (number <=0 || number > sizeof(struct in_addr)*8) {
+        if (number <= 0 || number > sizeof(struct in_addr) * 8) {
             return -1;
         }
         p->maskbit = (uint8_t)number;
@@ -93,7 +89,7 @@ int prefix_format(struct prefix* p, const char* str)
     return 0;
 }
 
-int prefix_fprintf(FILE * f, struct prefix* p)
+int prefix_fprintf(FILE* f, struct prefix* p)
 {
     return fprintf(f, "%s", p->string);
 }
@@ -120,7 +116,7 @@ bool prefix_cmp(struct prefix* p1, struct prefix* p2, uint8_t maskbit)
 #endif
         };
         uint64_t mask64;
-    }masku;
+    } masku;
     memset(&masku, 0, sizeof(masku));
     uint32_t mask;
     masku.maskhigh = 0xFFFFFFFFu;

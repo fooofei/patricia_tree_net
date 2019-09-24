@@ -4,7 +4,6 @@
 
 #include <string.h>
 
-
 void patree_iter_set(struct patree_iterator* it, const struct patree* tree)
 {
     memset(it, 0, sizeof(*it));
@@ -12,7 +11,8 @@ void patree_iter_set(struct patree_iterator* it, const struct patree* tree)
     it->next = tree->root;
 }
 
-struct patnode* patree_iter_next(struct patree_iterator* it, struct patnode** out)
+struct patnode* patree_iter_next(struct patree_iterator* it,
+    struct patnode** out)
 {
     *out = NULL;
 
