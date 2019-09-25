@@ -38,10 +38,11 @@ class NetTrie(object):
         ''' search the best match
         :param addr:
         :return: (addr, bind_data)
+        :raises ValueError for invalid arg addr
         '''
 
         if addr.max_prefixlen != self.max_prefixlen:
-            raise ValueError(f"fail match addr IP version, expect {self.max_prefixlen}")
+            raise ValueError(f"fail match addr prefixlen with {addr}, expect {self.max_prefixlen}")
 
         target = Node(addr, None, 0)
         next_node = self._root
@@ -79,10 +80,11 @@ class NetTrie(object):
         查找正好等于 addr 的结点
         :param addr:
         :return: (addr, bind_data) or None
+        :raises ValueError for invalid arg addr
         '''
 
         if addr.max_prefixlen != self.max_prefixlen:
-            raise ValueError(f"fail match addr IP version, expect {self.max_prefixlen}")
+            raise ValueError(f"fail match prefixlen with {addr}, expect {self.max_prefixlen}")
         target = Node(addr, None, 0)
         next_node = self._root
 
@@ -108,10 +110,10 @@ class NetTrie(object):
         :param addr:
         :param data:
         :return: (bool: insert ok or not, (addr, bind_data) :already exist value)
-        :raises
+        :raises ValueError for invalid arg addr
         '''
         if addr.max_prefixlen != self.max_prefixlen:
-            raise ValueError(f"fail match addr IP version, expect {self.max_prefixlen}")
+            raise ValueError(f"fail match prefixlen with {addr}, expect {self.max_prefixlen}")
 
         new_node = Node(addr, data, 0)
         if self._root is None:
@@ -143,11 +145,11 @@ class NetTrie(object):
                 new_node.bit_is_set(fstnode.prefixlen + 1):
 
                 if fstnode.right is not None:
-                    raise ValueError("fstnode.right is not None")
+                    raise ValueError(f"stnode.right is not None fstnode={fstnode} addr={addr}")
                 fstnode.right = new_node
             else:
                 if fstnode.left is not None:
-                    raise ValueError("fstnode.left is not None")
+                    raise ValueError(f"stnode.left is not None fstnode={fstnode} addr={addr}")
                 fstnode.left = new_node
             self._node_cnt += 1
             return True, None
@@ -188,19 +190,19 @@ class NetTrie(object):
         :return:
         '''
         prefixlen = node.prefixlen
-        next = self._root
+        next_node = self._root
 
-        while (next is not None) and \
-            (next.prefixlen < prefixlen or next.addr is None):
-            if next.prefixlen < self.max_prefixlen and node.bit_is_set(next.prefixlen + 1):
-                if next.right is None:
+        while (next_node is not None) and \
+            (next_node.prefixlen < prefixlen or next_node.addr is None):
+            if next_node.prefixlen < self.max_prefixlen and node.bit_is_set(next_node.prefixlen + 1):
+                if next_node.right is None:
                     break
-                next = next.right
+                next_node = next_node.right
             else:
-                if next.left is None:
+                if next_node.left is None:
                     break
-                next = next.left
-        return next
+                next_node = next_node.left
+        return next_node
 
     def _insert_to_child(self, new_node, child):
         parent = child.parent
