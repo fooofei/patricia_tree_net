@@ -161,6 +161,7 @@ class NetTrie(object):
                 new_node.right = fstnode
             else:
                 new_node.left = fstnode
+            self._insert_to_child(new_node, fstnode)
             self._node_cnt += 1
             return True, None
 
