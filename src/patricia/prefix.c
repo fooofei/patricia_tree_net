@@ -15,39 +15,98 @@
 #endif
 
 #ifndef max
-#define max(a, b) (((a)(b)) ? (a) : (b))
+#define max(a, b) (((a) > (b)) ? (a) : (b))
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 
-// convert mask 8 -> 0xFF 00 00 00
-static uint32_t maskbit2host(uint8_t maskbit)
-{
-    const uint8_t max_mask = sizeof(uint32_t) * 8;
-    uint8_t mask;
-    uint32_t v;
+#define IN_MAX_BITS (sizeof(struct in_addr) * 8)
+#define IN6_MAX_BITS (sizeof(struct in6_addr) * 8)
 
-    mask = min(max_mask, maskbit);
-    v = 0x01;
-    v = (v << (max_mask - mask)) - 1;
-    v = ~v;
-    return v;
+void set_all_bits(void* p, size_t l)
+{
+    uint8_t* u8 = (uint8_t*)p;
+    size_t i;
+    for (i = 0; i < l; i++) {
+        *u8 = 0xFF;
+        u8++;
+    }
+}
+
+// a1 = a1 & a2
+void addr_and(void* a1, void* a2, size_t addrlen)
+{
+    size_t i;
+    uint8_t* u1 = a1;
+    uint8_t* u2 = a2;
+    for (i = 0; i < addrlen; i++) {
+        *u1 = (*u1) & (*u2);
+        u1++;
+        u2++;
+    }
 }
 
 // floor the p->mask
+static void prefix_floor_mask_v4(struct prefix* p)
+{
+    struct in_addr* addr = (struct in_addr*)&p->naddr;
+    struct in_addr expect = { 0 };
+    struct in_addr maskaddr = { 0 };
+    int i;
+
+    memcpy(&expect, addr, sizeof(expect));
+
+    uint8_t* cursor = (uint8_t*)&maskaddr;
+    for (i = 0; i < p->maskbit / 8; i++) {
+        *cursor = 0xFF;
+        cursor += 1;
+    }
+    uint8_t m = p->maskbit % 8;
+    if (m != 0) {
+        *cursor = 0xFF < (8 - m);
+    }
+    addr_and(&expect, &maskaddr, sizeof(expect));
+    if (!IN_ARE_ADDR_EQUAL(addr, &expect)) {
+        memcpy(addr, &expect, sizeof(expect));
+        inet_ntop(p->addr_family, addr, p->sin_str, sizeof(p->sin_str));
+        snprintf(p->string, sizeof(p->string), "%s/%u", p->sin_str, p->maskbit);
+    }
+}
+
+static void prefix_floor_mask_v6(struct prefix* p)
+{
+    struct in6_addr* addr = (struct in6_addr*)&p->naddr;
+    struct in6_addr expect = { 0 };
+    struct in6_addr maskaddr = { 0 };
+    int i;
+
+    memcpy(&expect, addr, sizeof(expect));
+
+    uint8_t* cursor = (uint8_t*)&maskaddr;
+    for (i = 0; i < p->maskbit / 8; i++) {
+        *cursor = 0xFF;
+        cursor += 1;
+    }
+    uint8_t m = p->maskbit % 8;
+    if (m != 0) {
+        *cursor = 0xFF < (8 - m);
+    }
+    addr_and(&expect, &maskaddr, sizeof(expect));
+    if (!IN6_ARE_ADDR_EQUAL(addr, &expect)) {
+        memcpy(addr, &expect, sizeof(expect));
+        inet_ntop(p->addr_family, addr, p->sin_str, sizeof(p->sin_str));
+        snprintf(p->string, sizeof(p->string), "%s/%u", p->sin_str, p->maskbit);
+    }
+}
+
 static void prefix_floor_mask(struct prefix* p)
 {
-    uint32_t h;
     uint32_t maskh;
-    const uint8_t max_mask = sizeof(uint32_t) * 8;
+    const uint8_t max_mask_bits = p->addr_family == AF_INET ? IN_MAX_BITS : IN6_MAX_BITS;
 
-    maskh = maskbit2host(p->maskbit);
-    h = p->host;
-    h = h & maskh;
-    if (h != p->host) {
-        p->host = h;
-        p->sin = htonl(p->host);
-        p->maskbit = min(max_mask, p->maskbit);
-        inet_ntop(AF_INET, &p->sin, p->sin_str, sizeof(p->sin_str));
+    if (p->addr_family == AF_INET) {
+        prefix_floor_mask_v4(p);
+    } else {
+        prefix_floor_mask_v6(p);
     }
 }
 
@@ -60,8 +119,16 @@ static void prefix_floor_mask(struct prefix* p)
 int prefix_format(struct prefix* p, const char* str)
 {
     const char* sep;
-
+    uint8_t max_mask_bit = 0;
     for (sep = str; (*sep != 0) && (*sep != '/'); sep += 1) {
+    }
+
+    if (strstr(str, ":") != NULL) {
+        p->addr_family = AF_INET6;
+        max_mask_bit = IN6_MAX_BITS;
+    } else {
+        p->addr_family = AF_INET;
+        max_mask_bit = IN_MAX_BITS;
     }
 
     if (*sep) {
@@ -72,20 +139,23 @@ int prefix_format(struct prefix* p, const char* str)
         snprintf(s, sizeof(s), "%s", sep + 1);
         uint64_t number;
         number = (uint64_t)strtol(s, 0, 10);
-        if (number <= 0 || number > sizeof(struct in_addr) * 8) {
+        if (number <= 0 || number > max_mask_bit) {
             return -1;
         }
         p->maskbit = (uint8_t)number;
     } else {
-        p->maskbit = 32;
+        p->maskbit = max_mask_bit;
         sep = str + strlen(str);
     }
 
     snprintf(p->sin_str, sizeof(p->sin_str), "%.*s", (int)(sep - str), str);
-    inet_pton(AF_INET, p->sin_str, &p->sin);
-    p->host = ntohl(p->sin);
-    prefix_floor_mask(p);
+    int r;
+    r = inet_pton(p->addr_family, p->sin_str, &p->naddr);
+    if (r != 1) {
+        return -1;
+    }
     snprintf(p->string, sizeof(p->string), "%s/%u", p->sin_str, p->maskbit);
+    prefix_floor_mask(p);
     return 0;
 }
 
@@ -97,33 +167,59 @@ int prefix_fprintf(FILE* f, struct prefix* p)
 // maskbit >0
 bool prefix_cmp(struct prefix* p1, struct prefix* p2, uint8_t maskbit)
 {
-    uint32_t h1 = p1->host;
-    uint32_t h2 = p2->host;
-    union {
-        struct {
-            // on Windows always be little-endian
-#ifdef WIN32
-            uint32_t masklow;
-            uint32_t maskhigh;
-#else
-#if BYTE_ORDER == BIG_ENDIAN
-            uint32_t maskhigh;
-            uint32_t masklow;
-#else
-            uint32_t masklow;
-            uint32_t maskhigh;
-#endif
-#endif
-        };
-        uint64_t mask64;
-    } masku;
-    memset(&masku, 0, sizeof(masku));
-    uint32_t mask;
-    masku.maskhigh = 0xFFFFFFFFu;
-    masku.mask64 = masku.mask64 >> maskbit;
-    // masklow = ~maskhigh
-    mask = masku.masklow;
-    h1 = h1 & mask;
-    h2 = h2 & mask;
-    return h1 == h2;
+    if (maskbit <= 0) {
+        return true;
+    }
+    uint8_t* addr1 = (uint8_t*)&p1->naddr;
+    uint8_t* addr2 = (uint8_t*)&p2->naddr;
+    uint8_t div = maskbit / 8;
+    if (memcmp(addr1, addr2, div) != 0) {
+        return false;
+    }
+    uint8_t mod = maskbit % 8;
+    if (mod == 0) {
+        return true;
+    }
+    uint8_t v = 0xFF << (8 - mod);
+    return (addr1[div] & v) == (addr2[div] & v);
+}
+
+uint8_t prefix_fst_diff_mask(struct prefix* p1, struct prefix* p2)
+{
+    uint8_t chk_bits = min(p1->maskbit, p2->maskbit);
+    uint8_t i;
+    uint8_t j;
+    uint8_t diff_bit = 0;
+    uint8_t diff_byte = 0;
+    uint8_t* addr1 = (uint8_t*)&p1->naddr;
+    uint8_t* addr2 = (uint8_t*)&p2->naddr;
+
+    for (i = 0; i * 8 < chk_bits; i++) {
+        diff_byte = addr1[i] ^ addr2[i];
+        if (diff_byte == 0) {
+            // If not find diff bit, will use this default value.
+            diff_bit = (i + 1) * 8 + 1;
+            continue;
+        }
+        for (j = 0; j < 8; j++) {
+            if (diff_byte & (0x80u >> j)) {
+                break;
+            }
+        }
+        diff_bit = i * 8 + j + 1;
+        break;
+    }
+    diff_bit = min(min(p1->maskbit, p2->maskbit) + 1, diff_bit);
+    return diff_bit;
+}
+
+// see mask bit is 1 or 0
+// mask >0 && mask <= max_maskbit
+bool prefix_test_bit(struct prefix* p, uint8_t mask)
+{
+    mask -= 1;
+    uint8_t div = mask / 8;
+    uint8_t mod = mask % 8;
+    uint8_t* addr = (uint8_t*)&p->naddr;
+    return addr[div] & (0x80u >> mod);
 }

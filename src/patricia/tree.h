@@ -1,8 +1,4 @@
 
-/*
-  Only support IPv4
-*/
-
 #ifndef PATRICIA_TREE_H
 #define PATRICIA_TREE_H
 
@@ -36,10 +32,11 @@ struct patnode {
     struct prefix _a;
 };
 
-/* 这颗树的最大深度是 32 所以树中的递归不担忧栈溢出 */
+/* 这颗树的最大深度是 max_maskbit 所以树中的递归不担忧栈溢出 */
 struct patree {
     struct patnode* root;
-    uint32_t maxbits; /* for IP, 32 bit addresses  难道这个是所有结点的最大 mask ？ */
+    uint8_t addr_family;
+    uint32_t max_maskbit;
     int node_cnt;
     int glue_cnt;
     struct patnode* glue_list;
@@ -47,12 +44,12 @@ struct patree {
 
 void patnode_fprintf(FILE* f, const struct patnode* node);
 
-void patree_init(struct patree* tree);
+int patree_init(struct patree* tree, uint8_t addr_family);
 
 /* Insert prefix to tree.
     Return the new node contain the prefix or old node contain the prefix.
     The prefix is almost same, e.g. will find 10.0.0.0/9 for 10.1.0.0/9.
-    同 1 个 IP 不会学习两遍。
+    同 1 个 net addr （相同子网掩码）不会学习两遍。
 
 Lookup string the format of IP/MASK.
 node contains prefix
@@ -64,8 +61,10 @@ struct patnode* patree_lookup(struct patree* tree, struct patnode* node);
 // return NULL for fail
 struct patnode* patnode_format(struct patnode* node, const char* str);
 
+// 返回自身
 struct patnode* patree_search_exact(const struct patree* tree, const char* p);
 
+// 返回结果优先级：可能是自身的、按照子网掩码计算最长匹配的
 struct patnode* patree_search_best(const struct patree* tree, const char* p);
 
 /* 左旋转 90 度打印树. */
@@ -74,5 +73,11 @@ void patree_fprintf(FILE* f, const struct patree* tree);
 void patree_table(FILE* f, const struct patree* tree);
 
 void patree_term(struct patree* tree);
+
+#ifdef DEBUG
+#define ASSERT(expr)  assert((expr))
+#else
+#define ASSERT(expr)  ((void)0)
+#endif
 
 #endif /* _PATRICIA_H */

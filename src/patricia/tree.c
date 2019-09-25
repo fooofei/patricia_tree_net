@@ -18,63 +18,9 @@
 #endif
 
 #ifndef max
-#define max(a, b) (((a)(b)) ? (a) : (b))
+#define max(a, b) (((a) > (b)) ? (a) : (b))
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #endif
-
-/* Find the first different mask of p1 and p2.
-   The return value is starts from 1.
-*/
-
-static uint8_t diff_mask(struct patree* tree, const struct prefix* p1,
-    const struct prefix* p2)
-{
-    uint32_t h1 = p1->host;
-    uint32_t h2 = p2->host;
-    uint32_t n1 = htonl(h1);
-    uint32_t n2 = htonl(h2);
-
-    uint8_t* addr1 = (uint8_t*)&(n1);
-    uint8_t* addr2 = (uint8_t*)&(n2);
-    uint8_t chk_maskbit = min(p1->maskbit, p2->maskbit);
-    uint8_t diff_bit = 0;
-    uint8_t i = 0;
-    uint8_t diff_byte;
-    uint8_t j = 0;
-
-    for (i = 0; i * 8 < chk_maskbit; i += 1) {
-        // 从左到右找
-        diff_byte = (addr1[i] ^ addr2[i]);
-        if (0 == diff_byte) {
-            diff_bit = (i + 1) * 8;
-            continue;
-        }
-
-        // 这是在找 最先不同的那一bit
-        for (j = 0; j < 8; j += 1) {
-            if (diff_byte & (0x80u >> j)) {
-                break;
-            }
-        }
-        diff_bit = i * 8 + j + 1;
-        break;
-    }
-
-    diff_bit = min(diff_bit, chk_maskbit);
-    return diff_bit;
-}
-
-// 以 127.0.1.2 为例子
-// 如果 mask=31，在看倒数第1位是不是1，
-// mask=30, 在看倒数第2位是不是1
-// mask=29, 在看倒数第3位是不是1
-// 这是在找挨着掩码位的位置是不是1
-static uint32_t test_maskbit(const struct patree* tree, uint32_t host, uint8_t mask)
-{
-    uint32_t a = 0x01;
-    uint32_t b = a << (tree->maxbits - mask);
-    return host & b;
-}
 
 /* insert node to child's parent.
 newnode will be the child->parent's left or right.
@@ -97,23 +43,28 @@ static void patree_insert(struct patree* tree, struct patnode* newnode, struct p
 
 static void patree_fprintf1(FILE* f, const struct patnode* node, int space, int* dep)
 {
-    if (!node) {
-        return;
-    }
     (*dep)++;
     const int count = 10;
     space += count;
 
-    patree_fprintf1(f, node->right, space, dep);
-
+    if (node) {
+        patree_fprintf1(f, node->right, space, dep);
+    }
     fprintf(f, "%s", "\n");
     int i;
     for (i = count; i < space; i += 1) {
         fprintf(f, " ");
     }
-    patnode_fprintf(f, node);
+    if (node) {
+        patnode_fprintf(f, node);
+    } else {
+        fprintf(f, "<null>");
+    }
+
     fprintf(f, "%s", "\n");
-    patree_fprintf1(f, node->left, space, dep);
+    if (node) {
+        patree_fprintf1(f, node->left, space, dep);
+    }
     (*dep)--;
 }
 
@@ -131,14 +82,16 @@ struct patnode* patree_search_exact(const struct patree* tree, const char* p)
     if (rc < 0) {
         return NULL;
     }
-
+    if (pfx.addr_family != tree->addr_family) {
+        return NULL;
+    }
     struct patnode* next;
 
     next = tree->root;
     const uint8_t maskbit = pfx.maskbit;
 
     for (; (next != NULL && next->maskbit < maskbit);) {
-        if (test_maskbit(tree, pfx.host, next->maskbit)) {
+        if (prefix_test_bit(&pfx, next->maskbit + 1)) {
             next = next->right;
         } else {
             next = next->left;
@@ -169,6 +122,9 @@ struct patnode* patree_search_best(const struct patree* tree, const char* p)
     if (rc < 0) {
         return NULL;
     }
+    if (pfx.addr_family != tree->addr_family) {
+        return NULL;
+    }
     if (tree->root == NULL) {
         return NULL;
     }
@@ -181,7 +137,7 @@ struct patnode* patree_search_best(const struct patree* tree, const char* p)
             *stack_pointer = next;
             stack_pointer++;
         }
-        if (test_maskbit(tree, pfx.host, next->maskbit)) {
+        if (prefix_test_bit(&pfx, next->maskbit + 1)) {
             next = next->right;
         } else {
             next = next->left;
@@ -209,17 +165,19 @@ struct patnode* patree_search_best(const struct patree* tree, const char* p)
     return NULL;
 }
 
+// 这个函数名字非常不容易理解
+// 多个示例代码里都是这样的命名
+// 其实真实含义是搜索某条匹配链表（把在二叉树走的路径视为一个双向链表）里最尾部的结点
+//  
 static struct patnode* find_closest(struct patree* tree, struct prefix* lkp_prefix)
 {
     struct patnode* closest = NULL;
-    uint32_t lkp_host;
     uint8_t lkp_maskbit;
 
-    lkp_host = lkp_prefix->host;
     lkp_maskbit = lkp_prefix->maskbit;
     closest = tree->root;
     for (; (closest != NULL && (closest->maskbit < lkp_maskbit || closest->prefix == NULL));) {
-        if (closest->maskbit < tree->maxbits && test_maskbit(tree, lkp_host, closest->maskbit)) {
+        if (closest->maskbit < tree->max_maskbit && prefix_test_bit(lkp_prefix, closest->maskbit + 1)) {
             if (closest->right == NULL) {
                 break;
             }
@@ -240,6 +198,12 @@ https://github.com/opendaylight/lispflowmapping/blob/c7a0bda035cba583b090a78614f
 
 struct patnode* patree_lookup(struct patree* tree, struct patnode* lkp_node)
 {
+    if (lkp_node->prefix == NULL) {
+        return NULL;
+    }
+    if (lkp_node->prefix->addr_family != tree->addr_family) {
+        return NULL;
+    }
     if (tree->root == NULL) {
         tree->root = lkp_node;
         tree->node_cnt++;
@@ -249,56 +213,58 @@ struct patnode* patree_lookup(struct patree* tree, struct patnode* lkp_node)
     struct patnode* parent = NULL;
     struct prefix* lkp_prefix = NULL;
     uint8_t lkp_maskbit = 0;
-    uint32_t lkp_host = 0;
     struct patnode* closest = NULL;
     struct patnode* fstnode = NULL;
 
     lkp_prefix = lkp_node->prefix;
     lkp_maskbit = lkp_prefix->maskbit;
-    lkp_host = lkp_prefix->host;
 
+    // 先在二叉树中寻找匹配最好的一个路径，也就是双向链表，返回最尾部的结点
     closest = find_closest(tree, lkp_prefix);
 
     // 这个也不成立，一个 glue 结点，一定有左右孩子，
     // 下沉一定会到 glue 的孩子上，不会停留在 glue ，
     // 如果到了左右孩子，一定有 prefix
-    //if (closest->prefix == NULL) {
-    //    return NULL;
-    //}
-
-    // find first different bit<= min()
-    uint8_t diff_bit = diff_mask(tree, closest->prefix, lkp_prefix);
-    if (diff_bit >= tree->maxbits) {
+    if (closest->prefix == NULL) {
         return NULL;
     }
 
+    // find first different bit<= min()
+    uint8_t final_same_bit = prefix_fst_diff_mask(closest->prefix, lkp_prefix) - 1;
+    if (final_same_bit > tree->max_maskbit) {
+        final_same_bit = tree->max_maskbit;
+    }
+
     // find the first node with bit less than diffbit
+    // 拿着最后一个相同的子网掩码位，从尾结点向前寻找最开始不匹配的，就是需要分叉的结点
     fstnode = closest;
     parent = fstnode->parent;
-    for (; (parent != NULL && parent->maskbit >= diff_bit);) {
+    for (; (parent != NULL && parent->maskbit > final_same_bit);) {
         fstnode = parent;
         parent = fstnode->parent;
     }
 
-    if (diff_bit == fstnode->maskbit && fstnode->maskbit == lkp_maskbit) {
+    // 最后一个相同的子网掩码位是自己，而且还是 fstnode（分叉结点），说明这个 fstnode 是自己
+    if (final_same_bit == fstnode->maskbit && fstnode->maskbit == lkp_maskbit) {
         /* lookup 学习的 IP/MASK 是已经学习过的， 就会走到这里.
          如学习过 10.0.0.0/9, 再次 lookup  10.0.0.0/9 就会到这里，
-         如学习过 10.0.0.0/9，再次 lookup  10.1.0.0/9(错误的值) 也会走到这里
        */
-
         // fstnode->prefix ? 如果这里代表是已经学习过的，
         // 那么 prefix 一定存在
         return fstnode;
     }
-    if (diff_bit == fstnode->maskbit) {
+    
+    if (final_same_bit == fstnode->maskbit) {
         lkp_node->parent = fstnode;
-        if (fstnode->maskbit < tree->maxbits && test_maskbit(tree, lkp_host, fstnode->maskbit)) {
+        if (fstnode->maskbit < tree->max_maskbit && prefix_test_bit(lkp_prefix, fstnode->maskbit + 1)) {
             if (fstnode->right != NULL) {
+                ASSERT(fstnode->right == NULL);
                 return NULL;
             }
             fstnode->right = lkp_node;
         } else {
             if (fstnode->left != NULL) {
+                ASSERT(fstnode->left == NULL);
                 return NULL;
             }
             fstnode->left = lkp_node;
@@ -307,14 +273,14 @@ struct patnode* patree_lookup(struct patree* tree, struct patnode* lkp_node)
         return lkp_node;
     }
 
-    if (diff_bit == lkp_maskbit) {
-        uint32_t host;
+    if (final_same_bit == lkp_maskbit) {
+        struct prefix* p;
         if (fstnode->prefix) {
-            host = fstnode->prefix->host;
+            p = fstnode->prefix;
         } else {
-            host = closest->prefix->host;
+            p = closest->prefix;
         }
-        if (lkp_maskbit < tree->maxbits && test_maskbit(tree, host, lkp_maskbit)) {
+        if (lkp_maskbit < tree->max_maskbit && prefix_test_bit(p, lkp_maskbit + 1)) {
             lkp_node->right = fstnode;
         } else {
             lkp_node->left = fstnode;
@@ -323,14 +289,13 @@ struct patnode* patree_lookup(struct patree* tree, struct patnode* lkp_node)
         tree->node_cnt++;
         return lkp_node;
     }
-    // TODO memleak glue
     struct patnode* glue = calloc(1, sizeof(struct patnode));
     if (glue == NULL) {
         return NULL;
     }
-    glue->maskbit = diff_bit;
+    glue->maskbit = final_same_bit;
 
-    if (diff_bit < tree->maxbits && test_maskbit(tree, lkp_host, diff_bit)) {
+    if (final_same_bit < tree->max_maskbit && prefix_test_bit(lkp_prefix, final_same_bit + 1)) {
         glue->left = fstnode;
         glue->right = lkp_node;
     } else {
@@ -341,6 +306,7 @@ struct patnode* patree_lookup(struct patree* tree, struct patnode* lkp_node)
     lkp_node->parent = glue;
     tree->node_cnt++;
 
+    // add to glue list
     tree->glue_cnt++;
     glue->next = tree->glue_list;
     tree->glue_list = glue;
@@ -407,12 +373,21 @@ void patree_table(FILE* f, const struct patree* tree)
     fprintf(f, "\n");
 }
 
-void patree_init(struct patree* tree)
+int patree_init(struct patree* tree, uint8_t addr_family)
 {
     memset(tree, 0, sizeof(*tree));
-    tree->maxbits = 32;
     tree->node_cnt = 0;
     tree->glue_cnt = 0;
+    if (addr_family == AF_INET) {
+        tree->addr_family = AF_INET;
+        tree->max_maskbit = sizeof(struct in_addr) * 8;
+    } else if (addr_family == AF_INET6) {
+        tree->addr_family = AF_INET6;
+        tree->max_maskbit = sizeof(struct in6_addr) * 8;
+    } else {
+        return -1;
+    }
+    return 0;
 }
 
 struct patnode* patnode_format(struct patnode* node, const char* str)
@@ -423,6 +398,7 @@ struct patnode* patnode_format(struct patnode* node, const char* str)
     node->prefix_string = node->prefix->string;
     rc = prefix_format(node->prefix, str);
     if (rc < 0) {
+        memset(node, 0, sizeof(*node));
         return NULL;
     }
     node->maskbit = node->prefix->maskbit;
@@ -431,14 +407,15 @@ struct patnode* patnode_format(struct patnode* node, const char* str)
 
 void patree_term(struct patree* tree)
 {
-    struct patnode** ppnode = NULL;
+    struct patnode* next = NULL;
     struct patnode* del;
 
-    for (ppnode = &tree->glue_list; *ppnode;) {
-        del = *ppnode;
-        (*ppnode) = del->next;
+    next = tree->glue_list;
+    for (; next;) {
+        del = next;
+        next = del->next;
         free(del);
         tree->glue_cnt--;
     }
-    memset(tree, 0, sizeof(*tree));
+    patree_init(tree, tree->addr_family);
 }

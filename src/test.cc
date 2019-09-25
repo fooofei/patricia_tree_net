@@ -36,7 +36,25 @@ static void patree_format_m(list_node_t &nodes, struct patree *tree, const char 
     struct patnode *rc_node;
     node = (struct patnode *) calloc(1, sizeof(struct patnode));
     rc_node = patnode_format(node, str);
-    rc_node = patree_lookup(tree, node);
+    if(rc_node == NULL){
+        printf("fail parse %s\n", str);
+    }
+    if(rc_node){
+        int cnt_bak = tree->node_cnt;
+        rc_node = patree_lookup(tree, node);
+        if(rc_node == NULL){
+            printf("fail lookup %s\n", str);
+            patree_lookup(tree, node);
+        }
+        if (rc_node && cnt_bak == tree->node_cnt){
+            fprintf(stdout, "lookup: ");
+            patnode_fprintf(stdout,node);
+            fprintf(stdout, " same with: ");
+            patnode_fprintf(stdout, rc_node);
+            fprintf(stdout, "\n");
+        }
+    }
+
     nodes.push_back(node);
 }
 
@@ -57,7 +75,7 @@ void test()
     struct patree *tree = &mroot;
     std::list<struct patnode *> nodes;
 
-    patree_init(tree);
+    patree_init(tree, AF_INET);
 
     const char *cidrs[] = {
             "127.0.0.0/8",
@@ -210,7 +228,7 @@ void test1()
     };
 
 
-    patree_init(tree);
+    patree_init(tree, AF_INET);
     //
     patree_format_m(nodes, tree, cidrs[0]);
 
@@ -227,7 +245,6 @@ void test1()
         patree_format_m(nodes, tree, cidrs[i]);
     }
     //fclose(f);
-
 
     find = patree_search_best(tree, "10.42.42.0/24");
     EXPECT(0 == strcmp(find->prefix->string, cidrs[1]));
@@ -273,9 +290,7 @@ void test3()
     };
 
 
-    patree_init(tree);
-    //
-
+    patree_init(tree, AF_INET);
 
     for (i = 0; 0 != cidrs[i]; i += 1) {
         patree_format_m(nodes, tree, cidrs[i]);
@@ -314,7 +329,7 @@ void test_glue()
     list_node_t nodes;
     const char **pp;
 
-    patree_init(tree);
+    patree_init(tree, AF_INET);
 
     const char *cidrs[] = {
             "127.3.0.1/16",
@@ -326,6 +341,8 @@ void test_glue()
 
     pp = cidrs;
     for (; (*pp); pp++) {
+        struct patnode * node = NULL;
+        node = patree_search_best(tree, *pp);
         patree_format_m(nodes, tree, *pp);
     }
 
@@ -340,7 +357,7 @@ void test_32bitmask()
     list_node_t nodes;
     const char **pp;
 
-    patree_init(tree);
+    patree_init(tree, AF_INET);
 
     const char *cidrs[] = {
             "127.128.128.128/32",
@@ -359,6 +376,42 @@ void test_32bitmask()
     patree_node_term(nodes, tree);
 }
 
+void test_ipv6()
+{
+    struct patree treem;
+    memset(&treem, 0, sizeof(treem));
+    struct patree *tree = &treem;
+    list_node_t nodes;
+    const char **pp;
+
+    patree_init(tree, AF_INET6);
+
+    const char *cidrs[] = {
+            "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/16",
+            "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/32",
+            NULL,
+    };
+
+    pp = cidrs;
+
+
+    for (; (*pp); pp++) {
+    }
+    struct patnode * node = NULL;
+    node = patree_search_best(tree, cidrs[0]);
+    EXPECT(node == NULL);
+    patree_format_m(nodes, tree, *pp);
+
+    node = patree_search_best(tree, cidrs[1]);
+    EXPECT(node != NULL);
+    EXPECT(0 == strcmp(node->prefix_string,cidrs[0]));
+    patree_format_m(nodes, tree, cidrs[1]);
+
+    patree_node_term(nodes, tree);
+}
+
+// 20190925 我可总算是学会了
+
 int main(void)
 {
     struct _crt_dbg_leak dbg_leak;
@@ -370,7 +423,7 @@ int main(void)
     test();
     test1();
     test3();
-
+    test_ipv6();
     crt_dbg_leak_unlock(&dbg_leak);
     return 0;
 }
