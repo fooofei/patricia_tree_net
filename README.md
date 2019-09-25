@@ -1,6 +1,25 @@
 # trie
 
 
+一个 IP 网络地址书写形式为 
+1.1.1.0/25
+其网络地址为 1.1.1.0 广播地址为 1.1.1.127
+
+1.1.1.0/24 网络地址为  1.1.1.0 广播地址为 1.1.1.255
+
+1.1.1.0/26 网络地址为 1.1.1.0  广播地址为 1.1.1.63
+
+
+pysubnettree  半成品 lookup() 不存在时，返回 NULL， 非 Python 对象
+https://github.com/zeek/pysubnettree
+
+pytricia  这个还可以，能用 key 可以直接使用 python 官方模块 ipaddress
+https://github.com/jsommers/pytricia
+
+
+cidr-trie 功能不对 无法检测出子网
+https://pypi.org/project/cidr-trie/#files
+
 Maybe anothor from <https://github.com/brandt/network-patricia>
 
 It's a bad code, not learn it.
