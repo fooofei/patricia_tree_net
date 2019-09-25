@@ -204,7 +204,7 @@ class NetTrie(object):
     def _insert_to_child(self, new_node, child):
         parent = child.parent
         new_node.parent = parent
-        if parent is Node:
+        if parent is None:
             self._root = new_node
         elif parent.right == child:
             parent.right = new_node
