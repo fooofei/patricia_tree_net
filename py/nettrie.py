@@ -37,7 +37,7 @@ class NetTrie(object):
     def best(self, addr: IPv4Network or IPv6Network):
         ''' search the best match
         :param addr:
-        :return: (addr, bind_data)
+        :return: (addr, bind_data) 返回与 addr 一致的或者最长匹配的
         :raises ValueError for invalid arg addr
         '''
 
@@ -55,6 +55,10 @@ class NetTrie(object):
                 next_node = next_node.right
             else:
                 next_node = next_node.left
+
+        if next_node is not None and \
+            next_node.addr is not None:
+            matches.append(next_node)
 
         if not matches:
             return None
