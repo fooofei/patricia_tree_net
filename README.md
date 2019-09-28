@@ -1,6 +1,18 @@
 # trie
 
 
+[算法考试与路由有关系的]
+
+「CQOI2016」路由表 
+https://loj.ac/problem/2046#submit_code
+https://www.cnblogs.com/outerform/p/5921840.html
+http://oi.nks.edu.cn/jas/Problem/Details/3615
+
+这题解法很水，就是循环遍历，没有看到有人使用基于树的查找
+
+按照题目意思，增加计数的条件是从无到有，从短掩码匹配到长掩码匹配。
+
+
 一个 IP 网络地址书写形式为 
 1.1.1.0/25
 其网络地址为 1.1.1.0 广播地址为 1.1.1.127
@@ -10,7 +22,7 @@
 1.1.1.0/26 网络地址为 1.1.1.0  广播地址为 1.1.1.63
 
 
-pysubnettree  半成品 lookup() 不存在时，返回 NULL， 非 Python 对象
+[PySubnetTree - A Python Module for CIDR Lookups]  半成品 lookup() 不存在时，返回 NULL， 非 Python 对象
 https://github.com/zeek/pysubnettree
 
 pytricia  这个还可以，能用 key 可以直接使用 python 官方模块 ipaddress
@@ -37,9 +49,8 @@ http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=1494497
 
 [Adaptive Radix Trees implemented in Go] https://github.com/plar/go-adaptive-radix-tree
 
-[跟 Patricia 不是一回事][路由之路由表查找算法概述] https://blog.csdn.net/dog250/article/details/6596046
-
-[PySubnetTree - A Python Module for CIDR Lookups]https://github.com/bro/pysubnettree
+[跟 Patricia 不是一回事][思路可以学习][路由之路由表查找算法概述] 
+https://blog.csdn.net/dog250/article/details/6596046
 
 ```
 https://github.com/jsommers/pytricia/blob/master/patricia.c
